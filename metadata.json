@@ -1,0 +1,6 @@
+{
+  "name": "MediCompare BD",
+  "description": "Compare medical diagnostic test prices in Bangladeshi Taka (৳) across leading Bangladeshi hospitals and diagnostic centres.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

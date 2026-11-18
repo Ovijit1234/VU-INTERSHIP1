@@ -1,0 +1,2688 @@
+Your index.html and style.css already contain the full structure for Visitor
+Sign-In/Sign-Up, Admin-only Login, the 6-hospital comparison interface, and
+Excel/CSV import/export—what is missing is the script.js file to power all of
+those features, enforce strict user vs. admin permissions, and load
+the 6-hospital / 300-test reference dataset.
+
+Below you will find:
+
+1.  A clean, ready-to-use Prompt (as you requested)
+2.  The complete script.js file matching every element in your index.html and
+    style.css
+3.  Demo credentials & how role restriction works
+
+1. Reusable Prompt (For Documentation or Future Updates)
+
+Prompt: Build a responsive healthcare price comparison web application called
+MediCompare BD using HTML, CSS, and Vanilla JavaScript (index.html, style.css,
+script.js) with localStorage persistence and static-hosting compatibility.
+
+Data & Comparison Features:
+
+  - Preload a clearly labelled demonstration dataset of 6 Bangladeshi
+    hospitals/diagnostic centres (Popular Diagnostic Centre, Islami Bank
+    Hospital, Labaid Specialized Hospital, Ibn Sina Diagnostic & Imaging,
+    Medipath Diagnostic Complex, Amana Hospital) and 300 reference medical tests
+    with prices in Bangladeshi Taka (৳), categories, areas, contact details, and
+    preparation notes.
+  - Provide hero search with autocomplete, area filtering, popular test
+    shortcuts, a side-by-side comparison tray (up to 3 listings), sorting by
+    lowest price (৳) or highest rating, pagination, centre detail modals,
+    and 1–5 star patient reviews.
+
+Role-Based Access Control (Guest vs. Visitor vs. Admin):
+
+  - Public Guest: Read-only access to search, compare prices, view centre
+    details, and read reviews.
+  - Visitor / Patient Account (Sign Up & Sign In): Separate registration and
+    login modal (patient@demo.bd / patient123). Signed-in visitors unlock a
+    private Visitor Profile section where only they can view and manage their
+    Saved Tests & Live Prices and track the status (Pending, Confirmed,
+    Completed) of My Sample Requests. Visitors are strictly restricted from
+    editing hospital prices or accessing admin tools.
+  - Administrator Only (Special Admin Login): Dedicated Admin Panel (admin /
+    demo1234). Enforce strict role checks in JavaScript so only an authenticated
+    Admin can add/edit/delete diagnostic centres, edit individual or bulk test
+    prices in ৳, import/export .xlsx, .csv, and .json datasets (matching rows by
+    test_id), moderate patient reviews, and update sample booking request
+    statuses.
+
+2. Complete script.js Source Code
+
+Save this exact code as script.js in the same folder as your index.html and
+style.css.
+
+/* ==========================================================================
+   MediCompare BD — Application Logic, Role Access & Demonstration Dataset
+   Technologies: Vanilla JavaScript + localStorage (Static Hosting Ready)
+   ========================================================================== */
+
+(function () {
+  "use strict";
+
+  // --------------------------------------------------------------------------
+  // 1. STORAGE KEYS & ROLE CONSTANTS
+  // --------------------------------------------------------------------------
+  const STORAGE_KEYS = {
+    centres: "medicompare_centres_v2",
+    reviews: "medicompare_reviews_v2",
+    users: "medicompare_users_v2",
+    bookings: "medicompare_bookings_v2",
+    session: "medicompare_session_v2",
+  };
+
+  // Strict demo Admin credentials (only this account unlocks Admin Workspace)
+  const ADMIN_CREDENTIALS = {
+    username: "admin",
+    passcode: "demo1234",
+  };
+
+  const COMPARE_PAGE_SIZE = 12;
+  const ADMIN_TESTS_PAGE_SIZE = 15;
+
+  // --------------------------------------------------------------------------
+  // 2. REFERENCE DATASET BUILDER (6 HOSPITALS × 50 TESTS = 300 TEST ROWS)
+  //    Clearly labelled as Demonstration / Reference data in the UI.
+  // --------------------------------------------------------------------------
+  const BASE_TEST_CATALOG = [
+    { code: "001", name: "ECG", category: "Cardiology", basePrice: 350, prep: "No fasting needed · Report in 30 mins" },
+    { code: "002", name: "Blood Screening+Grouping", category: "General Diagnostics", basePrice: 400, prep: "No preparation · Same-day report" },
+    { code: "003", name: "CLO Test (DFARUQUE)", category: "Endoscopy & GI", basePrice: 1200, prep: "Performed during upper GI endoscopy" },
+    { code: "004", name: "Anesthesia for MRI of Brain", category: "Radiology & Imaging", basePrice: 4500, prep: "6 hrs fasting required · Doctor order needed" },
+    { code: "005", name: "Holter ECG 120hrs", category: "Cardiology", basePrice: 5500, prep: "Wear portable monitor · Report in 24 hrs" },
+    { code: "006", name: "CBC (Complete Blood Count)", category: "General Diagnostics", basePrice: 450, prep: "No fasting · Report in 3–4 hrs" },
+    { code: "007", name: "ESR (Erythrocyte Sedimentation Rate)", category: "General Diagnostics", basePrice: 200, prep: "No fasting · Same-day report" },
+    { code: "008", name: "HbA1c (Glycated Hemoglobin)", category: "General Diagnostics", basePrice: 1000, prep: "No fasting needed · Same-day report" },
+    { code: "009", name: "Fasting Blood Glucose (FBG)", category: "General Diagnostics", basePrice: 180, prep: "8–10 hrs overnight fasting" },
+    { code: "010", name: "2 Hours After Breakfast Glucose", category: "General Diagnostics", basePrice: 180, prep: "Collect exactly 2 hrs after meal" },
+    { code: "011", name: "Lipid Profile (Fasting)", category: "Cardiology", basePrice: 1100, prep: "10–12 hrs fasting required" },
+    { code: "012", name: "Liver Function Test (LFT / SGPT & SGOT)", category: "General Diagnostics", basePrice: 1050, prep: "Same-day digital report" },
+    { code: "013", name: "Serum Creatinine (Kidney Function)", category: "General Diagnostics", basePrice: 400, prep: "No fasting · Same-day report" },
+    { code: "014", name: "Serum Electrolytes (Na, K, Cl)", category: "General Diagnostics", basePrice: 900, prep: "No fasting · Report in 4 hrs" },
+    { code: "015", name: "Urine R/E (Routine Examination)", category: "General Diagnostics", basePrice: 250, prep: "Mid-stream clean catch sample" },
+    { code: "016", name: "Thyroid Stimulating Hormone (TSH)", category: "Serology & Immunology", basePrice: 800, prep: "Morning sample preferred" },
+    { code: "017", name: "Full Thyroid Panel (TSH, FT3, FT4)", category: "Serology & Immunology", basePrice: 2200, prep: "Same-day evening report" },
+    { code: "018", name: "Vitamin D (25-OH Total)", category: "Serology & Immunology", basePrice: 2400, prep: "Report within 24 hrs" },
+    { code: "019", name: "Vitamin B12", category: "Serology & Immunology", basePrice: 1800, prep: "Morning sample preferred" },
+    { code: "020", name: "Dengue NS1 Antigen", category: "Serology & Immunology", basePrice: 500, prep: "Best within day 1–5 of fever" },
+    { code: "021", name: "CRP (C-Reactive Protein)", category: "Serology & Immunology", basePrice: 700, prep: "No fasting · Same-day report" },
+    { code: "022", name: "HBsAg (Hepatitis B Screening)", category: "Serology & Immunology", basePrice: 650, prep: "Same-day report" },
+    { code: "023", name: "Anti-HCV (Hepatitis C)", category: "Serology & Immunology", basePrice: 1100, prep: "Same-day report" },
+    { code: "024", name: "Widal Test (Typhoid)", category: "Serology & Immunology", basePrice: 450, prep: "Same-day report" },
+    { code: "025", name: "Serum Ferritin", category: "Serology & Immunology", basePrice: 1400, prep: "Report in 24 hrs" },
+    { code: "026", name: "Troponin-I (Cardiac Marker)", category: "Cardiology", basePrice: 1500, prep: "Urgent report in 1–2 hrs" },
+    { code: "027", name: "Echocardiogram (2D & Color Doppler)", category: "Cardiology", basePrice: 2400, prep: "Prior slot recommended" },
+    { code: "028", name: "ETT (Exercise Tolerance Test)", category: "Cardiology", basePrice: 2800, prep: "Wear comfortable walking shoes" },
+    { code: "029", name: "Chest X-Ray (PA View Digital)", category: "Radiology & Imaging", basePrice: 550, prep: "Remove metallic objects · 1 hr report" },
+    { code: "030", name: "Ultrasound Whole Abdomen", category: "Radiology & Imaging", basePrice: 1400, prep: "6 hrs fasting & full bladder" },
+    { code: "031", name: "Ultrasound Pregnancy Profile", category: "Radiology & Imaging", basePrice: 1300, prep: "Full bladder recommended" },
+    { code: "032", name: "CT Scan of Brain (Plain)", category: "Radiology & Imaging", basePrice: 4200, prep: "Report within 3–4 hrs" },
+    { code: "033", name: "MRI of Brain (Plain)", category: "Radiology & Imaging", basePrice: 8200, prep: "Remove all metal implants/jewelry" },
+    { code: "034", name: "MRI of Lumbar Spine", category: "Radiology & Imaging", basePrice: 8500, prep: "Appointment required · 24 hr report" },
+    { code: "035", name: "Bilateral Mammography", category: "Radiology & Imaging", basePrice: 2600, prep: "Avoid deodorant on exam day" },
+    { code: "036", name: "Upper GI Endoscopy", category: "Endoscopy & GI", basePrice: 3500, prep: "8 hrs overnight fasting required" },
+    { code: "037", name: "Colonoscopy (Diagnostic)", category: "Endoscopy & GI", basePrice: 6500, prep: "Bowel prep kit 24 hrs prior" },
+    { code: "038", name: "Stool R/E & Occult Blood", category: "Endoscopy & GI", basePrice: 350, prep: "Fresh container sample" },
+    { code: "039", name: "Helicobacter Pylori Stool Ag", category: "Endoscopy & GI", basePrice: 1600, prep: "Stop PPI 7 days prior if advised" },
+    { code: "040", name: "Serum Amylase & Lipase", category: "Endoscopy & GI", basePrice: 1500, prep: "Same-day report" },
+    { code: "041", name: "Serum Uric Acid", category: "General Diagnostics", basePrice: 350, prep: "Same-day report" },
+    { code: "042", name: "Serum Calcium", category: "General Diagnostics", basePrice: 450, prep: "Same-day report" },
+    { code: "043", name: "D-Dimer", category: "Cardiology", basePrice: 1800, prep: "Same-day urgent report" },
+    { code: "044", name: "PSA (Prostate Specific Antigen)", category: "Serology & Immunology", basePrice: 1300, prep: "Report in 24 hrs" },
+    { code: "045", name: "Pap Smear (Liquid Based Cytology)", category: "General Diagnostics", basePrice: 1500, prep: "Report in 3 working days" },
+    { code: "046", name: "DEXA Bone Mineral Density", category: "Radiology & Imaging", basePrice: 3200, prep: "Appointment required" },
+    { code: "047", name: "Basic Health Checkup Package", category: "Packages & Services", basePrice: 2900, prep: "10 hrs fasting · CBC, FBG, Lipid, Creatinine" },
+    { code: "048", name: "Diabetes Monitoring Package", category: "Packages & Services", basePrice: 2400, prep: "Fasting · HbA1c, FBG, Creatinine, Urine R/E" },
+    { code: "049", name: "Executive Cardiac Screening", category: "Packages & Services", basePrice: 5200, prep: "Fasting · ECG, Echo, Lipid, Troponin, CBC" },
+    { code: "050", name: "Senior Citizen Annual Wellness", category: "Packages & Services", basePrice: 6400, prep: "10 hrs fasting · Full blood, TSH, USG & ECG" },
+  ];
+
+  const HOSPITAL_TEMPLATES = [
+    {
+      id: "centre-popular",
+      prefix: "POP",
+      name: "Popular Diagnostic Centre",
+      area: "Dhanmondi",
+      address: "House 16, Road 2, Dhanmondi, Dhaka 1205",
+      phone: "+880 9613-787801 (Demo)",
+      hours: "7:00 AM – 11:00 PM (Daily)",
+      homeCollection: true,
+      notes: "High-throughput automated lab with SMS/online report portal and home sample collection across Dhanmondi.",
+      multiplier: 1.05,
+    },
+    {
+      id: "centre-islami",
+      prefix: "IBH",
+      name: "Islami Bank Hospital",
+      area: "Kakrail / Motijheel",
+      address: "24/B Outer Circular Road, Motijheel, Dhaka 1000",
+      phone: "+880 2-9336421 (Demo)",
+      hours: "7:30 AM – 10:30 PM (Daily)",
+      homeCollection: true,
+      notes: "Known for affordable reference rates on routine pathology, radiology, and cardiac diagnostics.",
+      multiplier: 0.85,
+    },
+    {
+      id: "centre-labaid",
+      prefix: "LAB",
+      name: "Labaid Specialized Hospital",
+      area: "Dhanmondi",
+      address: "House 06, Road 04, Dhanmondi, Dhaka 1205",
+      phone: "+880 1766-662111 (Demo)",
+      hours: "24 Hours Diagnostic Wing",
+      homeCollection: true,
+      notes: "Dedicated 24/7 imaging, cardiac diagnostics, and priority digital reporting desk.",
+      multiplier: 1.15,
+    },
+    {
+      id: "centre-ibnsina",
+      prefix: "IBS",
+      name: "Ibn Sina Diagnostic & Imaging",
+      area: "Mirpur",
+      address: "House 11, Road 1, Block A, Mirpur 10, Dhaka 1216",
+      phone: "+880 9610-010615 (Demo)",
+      hours: "7:30 AM – 11:00 PM (Daily)",
+      homeCollection: true,
+      notes: "Popular for transparent pricing, digital X-Ray/MRI units, and weekend sample collection.",
+      multiplier: 0.92,
+    },
+    {
+      id: "centre-medipath",
+      prefix: "MED",
+      name: "Medipath Diagnostic Complex",
+      area: "Matikata",
+      address: "Matikata Main Road, Cantonment Area, Dhaka 1206",
+      phone: "+880 1711-002233 (Demo)",
+      hours: "8:00 AM – 10:00 PM (Sat–Thu)",
+      homeCollection: false,
+      notes: "Neighbourhood diagnostic facility serving Matikata & Mirpur DOHS with fast same-day reporting.",
+      multiplier: 0.88,
+    },
+    {
+      id: "centre-amana",
+      prefix: "AMA",
+      name: "Amana Hospital",
+      area: "Laxmipur",
+      address: "Hospital Road, Laxmipur Sadar / Regional Hub",
+      phone: "+880 1722-004455 (Demo)",
+      hours: "7:30 AM – 10:00 PM (Daily)",
+      homeCollection: true,
+      notes: "Regional multi-unit hospital offering budget-friendly diagnostic packages and endoscopy services.",
+      multiplier: 0.82,
+    },
+  ];
+
+  // Builds deterministic demonstration dataset of 6 hospitals × 50 tests = 300 rows
+  function buildDefaultCentres() {
+    return HOSPITAL_TEMPLATES.map((hosp, hIdx) => {
+      const tests = BASE_TEST_CATALOG.map((item, tIdx) => {
+        // Small deterministic variation per hospital & test rounded to nearest 10 BDT
+        const variance = ((hIdx * 7 + tIdx * 3) % 5) * 10 - 20;
+        const computedPrice = Math.max(
+          100,
+          Math.round((item.basePrice * hosp.multiplier + variance) / 10) * 10
+        );
+        return {
+          testId: `${hosp.prefix}-${item.code}`,
+          name: item.name,
+          category: item.category,
+          price: computedPrice,
+          prep: item.prep,
+        };
+      });
+
+      return {
+        id: hosp.id,
+        name: hosp.name,
+        area: hosp.area,
+        address: hosp.address,
+        phone: hosp.phone,
+        hours: hosp.hours,
+        homeCollection: hosp.homeCollection,
+        notes: hosp.notes,
+        tests,
+      };
+    });
+  }
+
+  const DEFAULT_REVIEWS = [
+    {
+      id: "rev-1",
+      centreId: "centre-islami",
+      author: "Mahmudul Hasan",
+      rating: 5,
+      comment: "Very reasonable diagnostic fees compared to larger private hubs. Got my CBC and ECG report the same afternoon.",
+      createdAt: "2026-10-12",
+      verifiedVisitor: true,
+    },
+    {
+      id: "rev-2",
+      centreId: "centre-popular",
+      author: "Nusrat Jahan",
+      rating: 4,
+      comment: "Morning rush at Dhanmondi branch can be busy, but online report download worked smoothly without needing a second trip.",
+      createdAt: "2026-10-19",
+      verifiedVisitor: true,
+    },
+    {
+      id: "rev-3",
+      centreId: "centre-ibnsina",
+      author: "Tanvir Ahmed",
+      rating: 5,
+      comment: "Booked home blood collection for my father in Mirpur. Phlebotomist arrived on time and fees matched the counter list.",
+      createdAt: "2026-10-25",
+      verifiedVisitor: false,
+    },
+    {
+      id: "rev-4",
+      centreId: "centre-labaid",
+      author: "Farhana Yasmin",
+      rating: 4,
+      comment: "Clean waiting lounge and helpful cardiology technicians for Echocardiogram, though prices are slightly higher.",
+      createdAt: "2026-11-02",
+      verifiedVisitor: true,
+    },
+    {
+      id: "rev-5",
+      centreId: "centre-medipath",
+      author: "Kamrul Islam",
+      rating: 4,
+      comment: "Convenient for quick routine tests near Matikata with minimal queue time.",
+      createdAt: "2026-11-06",
+      verifiedVisitor: false,
+    },
+    {
+      id: "rev-6",
+      centreId: "centre-amana",
+      author: "Sadia Afrin",
+      rating: 5,
+      comment: "Affordable health checkup package and polite reception staff.",
+      createdAt: "2026-11-10",
+      verifiedVisitor: true,
+    },
+  ];
+
+  // Seed a demo visitor account (Role: visitor — NEVER admin)
+  const DEFAULT_USERS = [
+    {
+      id: "user-demo-patient",
+      role: "visitor",
+      name: "Demo Patient",
+      email: "patient@demo.bd",
+      pass: "patient123",
+      area: "Dhanmondi",
+      savedTests: [
+        { centreId: "centre-islami", testId: "IBH-001" },
+        { centreId: "centre-popular", testId: "POP-047" },
+      ],
+    },
+  ];
+
+  const DEFAULT_BOOKINGS = [
+    {
+      id: "req-101",
+      userId: "user-demo-patient",
+      patientName: "Demo Patient",
+      patientPhone: "01700-112233",
+      centreId: "centre-islami",
+      testName: "ECG",
+      preferredDate: "2026-11-22",
+      collectionType: "Walk-in Counter",
+      status: "Confirmed",
+      createdAt: "2026-11-15",
+    },
+  ];
+
+  // --------------------------------------------------------------------------
+  // 3. APPLICATION STATE
+  // --------------------------------------------------------------------------
+  const state = {
+    centres: [],
+    reviews: [],
+    users: [],
+    bookings: [],
+    session: { role: "guest", userId: null, name: "" }, // role: 'guest' | 'visitor' | 'admin'
+    compareTray: [], // array of { centreId, testId } max 3
+    comparePage: 1,
+    activeDirectoryArea: "all",
+    selectedStarRating: 0,
+    activeAdminTab: "centres",
+    adminTestsPage: 1,
+    modifiedPrices: {}, // key: `${centreId}::${testId}` -> numeric price
+  };
+
+  // --------------------------------------------------------------------------
+  // 4. SAFE STORAGE & HELPER UTILITIES
+  // --------------------------------------------------------------------------
+  function loadFromStorage(key, fallbackFactory) {
+    try {
+      const raw = localStorage.getItem(key);
+      if (!raw) return fallbackFactory();
+      const parsed = JSON.parse(raw);
+      return parsed ?? fallbackFactory();
+    } catch (err) {
+      return fallbackFactory();
+    }
+  }
+
+  function saveToStorage(key, value) {
+    try {
+      localStorage.setItem(key, JSON.stringify(value));
+    } catch (err) {
+      // Ignore quota errors in private browsing
+    }
+  }
+
+  function escapeHtml(str) {
+    return String(str ?? "")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
+  }
+
+  function formatBDT(amount) {
+    const num = Number(amount) || 0;
+    return `৳ ${num.toLocaleString("en-US")}`;
+  }
+
+  function setFeedback(el, message, type) {
+    if (!el) return;
+    el.textContent = message || "";
+    el.classList.remove("is-error", "is-success");
+    if (type === "error") el.classList.add("is-error");
+    if (type === "success") el.classList.add("is-success");
+  }
+
+  function getCentreById(centreId) {
+    return state.centres.find((c) => c.id === centreId) || null;
+  }
+
+  function getCentreRatingStats(centreId) {
+    const centreReviews = state.reviews.filter((r) => r.centreId === centreId);
+    if (centreReviews.length === 0) {
+      return { avg: 0, count: 0, label: "No reviews yet" };
+    }
+    const sum = centreReviews.reduce((acc, r) => acc + Number(r.rating || 0), 0);
+    const avg = sum / centreReviews.length;
+    return {
+      avg,
+      count: centreReviews.length,
+      label: `${avg.toFixed(1)} (${centreReviews.length})`,
+    };
+  }
+
+  function getCurrentVisitor() {
+    if (state.session.role !== "visitor" || !state.session.userId) return null;
+    return state.users.find((u) => u.id === state.session.userId) || null;
+  }
+
+  // Strict Role Guard: blocks ANY admin mutation unless session.role === "admin"
+  function requireAdminRole(feedbackEl) {
+    if (state.session.role !== "admin") {
+      if (feedbackEl) {
+        setFeedback(
+          feedbackEl,
+          "Access denied: Only a signed-in Administrator can modify hospital data.",
+          "error"
+        );
+      }
+      return false;
+    }
+    return true;
+  }
+
+  // --------------------------------------------------------------------------
+  // 5. INITIALIZE STATE FROM LOCALSTORAGE
+  // --------------------------------------------------------------------------
+  function initState() {
+    state.centres = loadFromStorage(STORAGE_KEYS.centres, buildDefaultCentres);
+    state.reviews = loadFromStorage(STORAGE_KEYS.reviews, () => [...DEFAULT_REVIEWS]);
+    state.users = loadFromStorage(STORAGE_KEYS.users, () => JSON.parse(JSON.stringify(DEFAULT_USERS)));
+    state.bookings = loadFromStorage(STORAGE_KEYS.bookings, () => JSON.parse(JSON.stringify(DEFAULT_BOOKINGS)));
+    state.session = loadFromStorage(STORAGE_KEYS.session, () => ({
+      role: "guest",
+      userId: null,
+      name: "",
+    }));
+
+    // Ensure initial defaults are saved if first visit
+    saveToStorage(STORAGE_KEYS.centres, state.centres);
+    saveToStorage(STORAGE_KEYS.reviews, state.reviews);
+    saveToStorage(STORAGE_KEYS.users, state.users);
+    saveToStorage(STORAGE_KEYS.bookings, state.bookings);
+  }
+
+  // --------------------------------------------------------------------------
+  // 6. DOM REFERENCES
+  // --------------------------------------------------------------------------
+  const dom = {
+    openAccountBtn: document.getElementById("openAccountBtn"),
+    openAdminBtn: document.getElementById("openAdminBtn"),
+    mobileMenuBtn: document.getElementById("mobileMenuBtn"),
+    mobileNavDrawer: document.getElementById("mobileNavDrawer"),
+    mobileAccountBtn: document.getElementById("mobileAccountBtn"),
+    mobileAdminBtn: document.getElementById("mobileAdminBtn"),
+
+    heroSearchForm: document.getElementById("heroSearchForm"),
+    heroTestInput: document.getElementById("heroTestInput"),
+    heroAutocompleteList: document.getElementById("heroAutocompleteList"),
+    heroAreaSelect: document.getElementById("heroAreaSelect"),
+    quickTestButtons: document.getElementById("quickTestButtons"),
+    heroSnapshotRows: document.getElementById("heroSnapshotRows"),
+
+    statCentresCount: document.getElementById("statCentresCount"),
+    statTestsCount: document.getElementById("statTestsCount"),
+    statReviewsCount: document.getElementById("statReviewsCount"),
+    copyrightYear: document.getElementById("copyrightYear"),
+
+    resetComparisonFiltersBtn: document.getElementById("resetComparisonFiltersBtn"),
+    compareCentreSelect: document.getElementById("compareCentreSelect"),
+    compareCategorySelect: document.getElementById("compareCategorySelect"),
+    compareTestSelect: document.getElementById("compareTestSelect"),
+    compareAreaSelect: document.getElementById("compareAreaSelect"),
+    compareKeywordInput: document.getElementById("compareKeywordInput"),
+    compareSortSelect: document.getElementById("compareSortSelect"),
+    compareTray: document.getElementById("compareTray"),
+    compareTrayCount: document.getElementById("compareTrayCount"),
+    clearCompareTrayBtn: document.getElementById("clearCompareTrayBtn"),
+    compareTableBody: document.getElementById("compareTableBody"),
+    comparisonResultsCount: document.getElementById("comparisonResultsCount"),
+    comparisonPageHint: document.getElementById("comparisonPageHint"),
+    comparisonResultsGrid: document.getElementById("comparisonResultsGrid"),
+    comparisonPagination: document.getElementById("comparisonPagination"),
+    comparePrevPageBtn: document.getElementById("comparePrevPageBtn"),
+    comparePageInfo: document.getElementById("comparePageInfo"),
+    compareNextPageBtn: document.getElementById("compareNextPageBtn"),
+
+    centreAreaTabs: document.getElementById("centreAreaTabs"),
+    centresDirectoryGrid: document.getElementById("centresDirectoryGrid"),
+
+    reviewAccountHint: document.getElementById("reviewAccountHint"),
+    reviewForm: document.getElementById("reviewForm"),
+    reviewCentreSelect: document.getElementById("reviewCentreSelect"),
+    starRatingInput: document.getElementById("starRatingInput"),
+    starRatingValueLabel: document.getElementById("starRatingValueLabel"),
+    reviewerNameInput: document.getElementById("reviewerNameInput"),
+    reviewCommentInput: document.getElementById("reviewCommentInput"),
+    reviewFormFeedback: document.getElementById("reviewFormFeedback"),
+    reviewFilterSelect: document.getElementById("reviewFilterSelect"),
+    reviewsFeedList: document.getElementById("reviewsFeedList"),
+
+    centreDetailModal: document.getElementById("centreDetailModal"),
+    detailModalArea: document.getElementById("detailModalArea"),
+    detailModalTitle: document.getElementById("detailModalTitle"),
+    centreDetailModalBody: document.getElementById("centreDetailModalBody"),
+
+    legalModal: document.getElementById("legalModal"),
+    legalModalTitle: document.getElementById("legalModalTitle"),
+    legalModalBody: document.getElementById("legalModalBody"),
+
+    // Visitor Account Modal
+    accountModal: document.getElementById("accountModal"),
+    accountModalTitle: document.getElementById("accountModalTitle"),
+    visitorLogoutBtn: document.getElementById("visitorLogoutBtn"),
+    visitorAuthView: document.getElementById("visitorAuthView"),
+    tabVisitorSignInBtn: document.getElementById("tabVisitorSignInBtn"),
+    tabVisitorSignUpBtn: document.getElementById("tabVisitorSignUpBtn"),
+    visitorSignInForm: document.getElementById("visitorSignInForm"),
+    visitorLoginEmailInput: document.getElementById("visitorLoginEmailInput"),
+    visitorLoginPassInput: document.getElementById("visitorLoginPassInput"),
+    visitorSignInFeedback: document.getElementById("visitorSignInFeedback"),
+    fillDemoVisitorBtn: document.getElementById("fillDemoVisitorBtn"),
+    visitorSignUpForm: document.getElementById("visitorSignUpForm"),
+    visitorRegNameInput: document.getElementById("visitorRegNameInput"),
+    visitorRegEmailInput: document.getElementById("visitorRegEmailInput"),
+    visitorRegAreaSelect: document.getElementById("visitorRegAreaSelect"),
+    visitorRegPassInput: document.getElementById("visitorRegPassInput"),
+    visitorSignUpFeedback: document.getElementById("visitorSignUpFeedback"),
+    visitorProfileView: document.getElementById("visitorProfileView"),
+    visitorProfileMeta: document.getElementById("visitorProfileMeta"),
+    visitorProfileName: document.getElementById("visitorProfileName"),
+    visitorSavedList: document.getElementById("visitorSavedList"),
+    visitorRequestsList: document.getElementById("visitorRequestsList"),
+
+    // Admin Modal
+    adminModal: document.getElementById("adminModal"),
+    adminLogoutBtn: document.getElementById("adminLogoutBtn"),
+    adminLoginView: document.getElementById("adminLoginView"),
+    adminVisitorBlockedNotice: document.getElementById("adminVisitorBlockedNotice"),
+    adminLoginForm: document.getElementById("adminLoginForm"),
+    adminUsernameInput: document.getElementById("adminUsernameInput"),
+    adminPasscodeInput: document.getElementById("adminPasscodeInput"),
+    adminLoginFeedback: document.getElementById("adminLoginFeedback"),
+    fillDemoAdminBtn: document.getElementById("fillDemoAdminBtn"),
+    adminWorkspaceView: document.getElementById("adminWorkspaceView"),
+
+    adminCentreFormTitle: document.getElementById("adminCentreFormTitle"),
+    adminCentreForm: document.getElementById("adminCentreForm"),
+    editCentreId: document.getElementById("editCentreId"),
+    centreNameInput: document.getElementById("centreNameInput"),
+    centreAreaInput: document.getElementById("centreAreaInput"),
+    centrePhoneInput: document.getElementById("centrePhoneInput"),
+    centreAddressInput: document.getElementById("centreAddressInput"),
+    centreHoursInput: document.getElementById("centreHoursInput"),
+    centreHomeCollectionSelect: document.getElementById("centreHomeCollectionSelect"),
+    centreNotesInput: document.getElementById("centreNotesInput"),
+    adminCentreFeedback: document.getElementById("adminCentreFeedback"),
+    adminCentreSubmitBtn: document.getElementById("adminCentreSubmitBtn"),
+    cancelEditCentreBtn: document.getElementById("cancelEditCentreBtn"),
+    resetDemoDataBtn: document.getElementById("resetDemoDataBtn"),
+    adminCentresList: document.getElementById("adminCentresList"),
+
+    adminTestForm: document.getElementById("adminTestForm"),
+    testCentreSelect: document.getElementById("testCentreSelect"),
+    newTestNameInput: document.getElementById("newTestNameInput"),
+    newTestCategorySelect: document.getElementById("newTestCategorySelect"),
+    newTestPriceInput: document.getElementById("newTestPriceInput"),
+    newTestPrepInput: document.getElementById("newTestPrepInput"),
+    applyTestAllCentres: document.getElementById("applyTestAllCentres"),
+    adminTestFeedback: document.getElementById("adminTestFeedback"),
+    adminTestsCountMeta: document.getElementById("adminTestsCountMeta"),
+    adminSaveAllPricesBtn: document.getElementById("adminSaveAllPricesBtn"),
+    adminTestFilterCentre: document.getElementById("adminTestFilterCentre"),
+    adminTestFilterCategory: document.getElementById("adminTestFilterCategory"),
+    adminTestSearchInput: document.getElementById("adminTestSearchInput"),
+    adminBulkPriceFeedback: document.getElementById("adminBulkPriceFeedback"),
+    adminTestsTableBody: document.getElementById("adminTestsTableBody"),
+    adminTestsPrevBtn: document.getElementById("adminTestsPrevBtn"),
+    adminTestsPageInfo: document.getElementById("adminTestsPageInfo"),
+    adminTestsNextBtn: document.getElementById("adminTestsNextBtn"),
+
+    exportXlsxBtn: document.getElementById("exportXlsxBtn"),
+    exportCsvBtn: document.getElementById("exportCsvBtn"),
+    exportJsonBtn: document.getElementById("exportJsonBtn"),
+    importFileInput: document.getElementById("importFileInput"),
+    importPasteTextarea: document.getElementById("importPasteTextarea"),
+    adminImportFeedback: document.getElementById("adminImportFeedback"),
+    runImportBtn: document.getElementById("runImportBtn"),
+
+    adminReviewsList: document.getElementById("adminReviewsList"),
+    adminBookingsList: document.getElementById("adminBookingsList"),
+  };
+
+  // --------------------------------------------------------------------------
+  // 7. MODAL HELPERS
+  // --------------------------------------------------------------------------
+  function openModal(modalEl) {
+    if (!modalEl) return;
+    modalEl.hidden = false;
+    document.body.style.overflow = "hidden";
+  }
+
+  function closeModal(modalEl) {
+    if (!modalEl) return;
+    modalEl.hidden = true;
+    const anyOpen = document.querySelector(".modal-backdrop:not([hidden])");
+    if (!anyOpen) {
+      document.body.style.overflow = "";
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // 8. COLLECT UNIQUE AREAS, CATEGORIES, AND TESTS
+  // --------------------------------------------------------------------------
+  function getUniqueAreas() {
+    return [...new Set(state.centres.map((c) => c.area).filter(Boolean))].sort();
+  }
+
+  function getUniqueCategories() {
+    const cats = new Set();
+    state.centres.forEach((c) =>
+      c.tests.forEach((t) => {
+        if (t.category) cats.add(t.category);
+      })
+    );
+    return [...cats].sort();
+  }
+
+  function getUniqueTestsWithCategory() {
+    const map = new Map();
+    state.centres.forEach((c) => {
+      c.tests.forEach((t) => {
+        if (!map.has(t.name)) {
+          map.set(t.name, t.category || "General Diagnostics");
+        }
+      });
+    });
+    return [...map.entries()]
+      .map(([name, category]) => ({ name, category }))
+      .sort((a, b) => a.name.localeCompare(b.name));
+  }
+
+  function getFlattenedTestListings() {
+    const rows = [];
+    state.centres.forEach((centre) => {
+      const ratingStats = getCentreRatingStats(centre.id);
+      centre.tests.forEach((test) => {
+        rows.push({
+          centreId: centre.id,
+          centreName: centre.name,
+          area: centre.area,
+          address: centre.address,
+          phone: centre.phone,
+          homeCollection: centre.homeCollection,
+          ratingAvg: ratingStats.avg,
+          ratingCount: ratingStats.count,
+          ratingLabel: ratingStats.label,
+          testId: test.testId,
+          testName: test.name,
+          category: test.category || "General Diagnostics",
+          price: Number(test.price) || 0,
+          prep: test.prep || "Standard laboratory preparation",
+        });
+      });
+    });
+    return rows;
+  }
+
+  // --------------------------------------------------------------------------
+  // 9. SYNC HEADER & ROLE UI (GUEST vs VISITOR vs ADMIN)
+  // --------------------------------------------------------------------------
+  function updateRoleUI() {
+    const visitor = getCurrentVisitor();
+    const isAdmin = state.session.role === "admin";
+
+    if (visitor) {
+      dom.openAccountBtn.textContent = `Account: ${visitor.name.split(" ")[0]}`;
+      dom.openAccountBtn.classList.add("active");
+      dom.mobileAccountBtn.textContent = `Visitor Account (${visitor.name})`;
+      dom.reviewAccountHint.textContent = `Signed in as Visitor: ${visitor.name}. Your reviews carry a Verified Member badge.`;
+      if (!dom.reviewerNameInput.value.trim()) {
+        dom.reviewerNameInput.value = visitor.name;
+      }
+    } else {
+      dom.openAccountBtn.textContent = "Sign In";
+      dom.openAccountBtn.classList.remove("active");
+      dom.mobileAccountBtn.textContent = "Visitor Sign In / Register";
+      dom.reviewAccountHint.textContent =
+        "Select a diagnostic centre, choose a star rating, and write a short review.";
+    }
+
+    if (isAdmin) {
+      dom.openAdminBtn.textContent = "Admin Panel (Active)";
+      dom.mobileAdminBtn.textContent = "Admin Panel (Active)";
+    } else {
+      dom.openAdminBtn.textContent = "Admin Login";
+      dom.mobileAdminBtn.textContent = "Admin Login";
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // 10. POPULATE DROPDOWNS & STATS
+  // --------------------------------------------------------------------------
+  function populateSelectOptions() {
+    const areas = getUniqueAreas();
+    const categories = getUniqueCategories();
+    const tests = getUniqueTestsWithCategory();
+
+    // Preserve current selections where possible
+    const prevHeroArea = dom.heroAreaSelect.value;
+    const prevCompareArea = dom.compareAreaSelect.value;
+    const prevCompareCentre = dom.compareCentreSelect.value;
+    const prevCompareCat = dom.compareCategorySelect.value;
+    const prevCompareTest = dom.compareTestSelect.value;
+
+    // Areas
+    dom.heroAreaSelect.innerHTML = `<option value="all">All Areas (Bangladesh)</option>` +
+      areas.map((a) => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join("");
+    if (areas.includes(prevHeroArea)) dom.heroAreaSelect.value = prevHeroArea;
+
+    dom.compareAreaSelect.innerHTML = `<option value="all">All Areas</option>` +
+      areas.map((a) => `<option value="${escapeHtml(a)}">${escapeHtml(a)}</option>`).join("");
+    if (areas.includes(prevCompareArea)) dom.compareAreaSelect.value = prevCompareArea;
+
+    // Hospitals
+    const centreOptions = state.centres
+      .map((c) => `<option value="${escapeHtml(c.id)}">${escapeHtml(c.name)} (${escapeHtml(c.area)})</option>`)
+      .join("");
+
+    dom.compareCentreSelect.innerHTML =
+      `<option value="all">All Hospitals (${state.centres.length})</option>` + centreOptions;
+    if (state.centres.some((c) => c.id === prevCompareCentre)) {
+      dom.compareCentreSelect.value = prevCompareCentre;
+    }
+
+    dom.reviewCentreSelect.innerHTML = centreOptions;
+    dom.reviewFilterSelect.innerHTML = `<option value="all">All Centres</option>` + centreOptions;
+    dom.testCentreSelect.innerHTML = centreOptions;
+    dom.adminTestFilterCentre.innerHTML = `<option value="all">All Hospitals</option>` + centreOptions;
+
+    // Categories
+    const catOptions = categories
+      .map((cat) => `<option value="${escapeHtml(cat)}">${escapeHtml(cat)}</option>`)
+      .join("");
+    dom.compareCategorySelect.innerHTML = `<option value="all">All Categories</option>` + catOptions;
+    if (categories.includes(prevCompareCat)) dom.compareCategorySelect.value = prevCompareCat;
+    dom.adminTestFilterCategory.innerHTML = `<option value="all">All Categories</option>` + catOptions;
+
+    // Tests
+    dom.compareTestSelect.innerHTML = `<option value="all">All Medical Tests (${tests.length})</option>` +
+      tests.map((t) => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)}</option>`).join("");
+    if (tests.some((t) => t.name === prevCompareTest)) {
+      dom.compareTestSelect.value = prevCompareTest;
+    }
+  }
+
+  function renderStats() {
+    const totalTests = state.centres.reduce((acc, c) => acc + c.tests.length, 0);
+    dom.statCentresCount.textContent = String(state.centres.length);
+    dom.statTestsCount.textContent = String(totalTests);
+    dom.statReviewsCount.textContent = String(state.reviews.length);
+    if (dom.copyrightYear) {
+      dom.copyrightYear.textContent = String(new Date().getFullYear());
+    }
+  }
+
+  function renderHeroSnapshot() {
+    const featuredNames = [
+      "ECG",
+      "Blood Screening+Grouping",
+      "CLO Test (DFARUQUE)",
+      "MRI of Brain (Plain)",
+    ];
+    const allListings = getFlattenedTestListings();
+
+    const rowsHtml = featuredNames
+      .map((testName) => {
+        const matches = allListings.filter((item) => item.testName === testName);
+        if (matches.length === 0) return "";
+        const prices = matches.map((m) => m.price);
+        const min = Math.min(...prices);
+        const max = Math.max(...prices);
+        return `
+          <div class="snapshot-row">
+            <span class="snapshot-test-name">${escapeHtml(testName)}</span>
+            <span class="snapshot-price-range tabular-nums">${formatBDT(min)} – ${formatBDT(max)}</span>
+          </div>
+        `;
+      })
+      .join("");
+
+    dom.heroSnapshotRows.innerHTML =
+      rowsHtml || `<p class="card-meta-line">Add diagnostic tests to view price snapshots.</p>`;
+  }
+
+  // --------------------------------------------------------------------------
+  // 11. TEST COMPARISON SECTION (FILTER, SORT, PAGINATE, COMPARE TRAY, SAVE)
+  // --------------------------------------------------------------------------
+  function getFilteredSortedListings() {
+    const centreFilter = dom.compareCentreSelect.value;
+    const categoryFilter = dom.compareCategorySelect.value;
+    const testFilter = dom.compareTestSelect.value;
+    const areaFilter = dom.compareAreaSelect.value;
+    const keyword = dom.compareKeywordInput.value.trim().toLowerCase();
+    const sortBy = dom.compareSortSelect.value;
+
+    let results = getFlattenedTestListings().filter((item) => {
+      if (centreFilter !== "all" && item.centreId !== centreFilter) return false;
+      if (categoryFilter !== "all" && item.category !== categoryFilter) return false;
+      if (testFilter !== "all" && item.testName !== testFilter) return false;
+      if (areaFilter !== "all" && item.area !== areaFilter) return false;
+      if (keyword) {
+        const hay = `${item.testName} ${item.testId} ${item.category} ${item.centreName} ${item.area}`.toLowerCase();
+        if (!hay.includes(keyword)) return false;
+      }
+      return true;
+    });
+
+    results.sort((a, b) => {
+      if (sortBy === "price-asc") return a.price - b.price;
+      if (sortBy === "price-desc") return b.price - a.price;
+      if (sortBy === "rating-desc") return b.ratingAvg - a.ratingAvg || a.price - b.price;
+      if (sortBy === "name-asc") return a.centreName.localeCompare(b.centreName) || a.price - b.price;
+      if (sortBy === "test-asc") return a.testName.localeCompare(b.testName) || a.price - b.price;
+      return 0;
+    });
+
+    return results;
+  }
+
+  function isTestInCompareTray(centreId, testId) {
+    return state.compareTray.some((x) => x.centreId === centreId && x.testId === testId);
+  }
+
+  function isTestSavedByVisitor(centreId, testId) {
+    const visitor = getCurrentVisitor();
+    if (!visitor) return false;
+    return (visitor.savedTests || []).some((x) => x.centreId === centreId && x.testId === testId);
+  }
+
+  function renderComparisonResults() {
+    const results = getFilteredSortedListings();
+    const total = results.length;
+    const totalPages = Math.max(1, Math.ceil(total / COMPARE_PAGE_SIZE));
+    if (state.comparePage > totalPages) state.comparePage = totalPages;
+
+    const startIdx = (state.comparePage - 1) * COMPARE_PAGE_SIZE;
+    const pageItems = results.slice(startIdx, startIdx + COMPARE_PAGE_SIZE);
+
+    dom.comparisonResultsCount.textContent = `Showing ${total} matching test listing${total === 1 ? "" : "s"}`;
+    dom.comparisonPageHint.textContent =
+      total > 0
+        ? `Displaying ${startIdx + 1}–${startIdx + pageItems.length} of ${total}`
+        : "";
+
+    if (pageItems.length === 0) {
+      dom.comparisonResultsGrid.innerHTML = `
+        <div class="empty-state">
+          <p><strong>No matching diagnostic test listings found.</strong></p>
+          <p>Try clearing your filters or searching with a broader test keyword.</p>
+        </div>
+      `;
+      dom.comparisonPagination.hidden = true;
+      return;
+    }
+
+    dom.comparisonResultsGrid.innerHTML = pageItems
+      .map((item) => {
+        const inTray = isTestInCompareTray(item.centreId, item.testId);
+        const isSaved = isTestSavedByVisitor(item.centreId, item.testId);
+
+        return `
+          <article class="result-card">
+            <div>
+              <p class="card-meta-line">${escapeHtml(item.area)} · ${escapeHtml(item.category)} · ${escapeHtml(item.testId)}</p>
+              <h3 class="card-title">${escapeHtml(item.centreName)}</h3>
+              <p class="card-test-name">${escapeHtml(item.testName)}</p>
+
+              <div class="price-row">
+                <span class="price-amount tabular-nums">${formatBDT(item.price)}</span>
+                <span class="rating-text">
+                  <span class="rating-star">★</span> ${escapeHtml(item.ratingLabel)}
+                </span>
+              </div>
+
+              <div class="card-details-list">
+                <span><strong>Prep:</strong> ${escapeHtml(item.prep)}</span>
+                <span><strong>Home Sample:</strong> ${item.homeCollection ? "Available" : "Walk-in Only"}</span>
+                <span><strong>Phone:</strong> ${escapeHtml(item.phone)}</span>
+              </div>
+            </div>
+
+            <div class="card-actions-row">
+              <button
+                type="button"
+                class="btn btn-outline btn-sm ${inTray ? "active" : ""}"
+                data-action="toggle-compare"
+                data-centre-id="${escapeHtml(item.centreId)}"
+                data-test-id="${escapeHtml(item.testId)}"
+              >
+                ${inTray ? "Compared ✓" : "+ Compare"}
+              </button>
+              <button
+                type="button"
+                class="btn btn-outline btn-sm ${isSaved ? "active" : ""}"
+                data-action="toggle-save"
+                data-centre-id="${escapeHtml(item.centreId)}"
+                data-test-id="${escapeHtml(item.testId)}"
+              >
+                ${isSaved ? "Saved ★" : "Save"}
+              </button>
+              <button
+                type="button"
+                class="btn btn-primary btn-sm"
+                data-action="view-details"
+                data-centre-id="${escapeHtml(item.centreId)}"
+              >
+                Details
+              </button>
+            </div>
+          </article>
+        `;
+      })
+      .join("");
+
+    // Pagination bar
+    dom.comparisonPagination.hidden = totalPages <= 1;
+    dom.comparePageInfo.textContent = `Page ${state.comparePage} of ${totalPages}`;
+    dom.comparePrevPageBtn.disabled = state.comparePage <= 1;
+    dom.compareNextPageBtn.disabled = state.comparePage >= totalPages;
+  }
+
+  function renderCompareTray() {
+    if (state.compareTray.length === 0) {
+      dom.compareTray.hidden = true;
+      dom.compareTableBody.innerHTML = "";
+      return;
+    }
+
+    dom.compareTray.hidden = false;
+    dom.compareTrayCount.textContent = String(state.compareTray.length);
+
+    const rowsHtml = state.compareTray
+      .map((entry) => {
+        const centre = getCentreById(entry.centreId);
+        if (!centre) return "";
+        const test = centre.tests.find((t) => t.testId === entry.testId);
+        if (!test) return "";
+        const rating = getCentreRatingStats(centre.id);
+
+        return `
+          <tr>
+            <td><strong>${escapeHtml(centre.name)}</strong></td>
+            <td>${escapeHtml(centre.area)}</td>
+            <td>${escapeHtml(test.name)}</td>
+            <td class="tabular-nums"><strong>${formatBDT(test.price)}</strong></td>
+            <td>★ ${escapeHtml(rating.label)}</td>
+            <td>${centre.homeCollection ? "Available" : "Walk-in Only"}</td>
+            <td>${escapeHtml(centre.phone)}</td>
+            <td>
+              <button
+                type="button"
+                class="btn btn-text"
+                data-action="remove-compare"
+                data-centre-id="${escapeHtml(centre.id)}"
+                data-test-id="${escapeHtml(test.testId)}"
+              >
+                Remove
+              </button>
+            </td>
+          </tr>
+        `;
+      })
+      .join("");
+
+    dom.compareTableBody.innerHTML = rowsHtml;
+  }
+
+  // --------------------------------------------------------------------------
+  // 12. DIAGNOSTIC CENTRES DIRECTORY
+  // --------------------------------------------------------------------------
+  function renderDirectoryAreaTabs() {
+    const areas = getUniqueAreas();
+    if (state.activeDirectoryArea !== "all" && !areas.includes(state.activeDirectoryArea)) {
+      state.activeDirectoryArea = "all";
+    }
+
+    const tabs = ["all", ...areas];
+    dom.centreAreaTabs.innerHTML = tabs
+      .map((area) => {
+        const isActive = state.activeDirectoryArea === area;
+        const label = area === "all" ? `All Centres (${state.centres.length})` : area;
+        return `
+          <button
+            type="button"
+            class="area-tab ${isActive ? "active" : ""}"
+            role="tab"
+            aria-selected="${isActive}"
+            data-area-tab="${escapeHtml(area)}"
+          >
+            ${escapeHtml(label)}
+          </button>
+        `;
+      })
+      .join("");
+  }
+
+  function renderCentresDirectory() {
+    const filtered = state.centres.filter(
+      (c) => state.activeDirectoryArea === "all" || c.area === state.activeDirectoryArea
+    );
+
+    if (filtered.length === 0) {
+      dom.centresDirectoryGrid.innerHTML = `<div class="empty-state">No diagnostic centres found in this area.</div>`;
+      return;
+    }
+
+    dom.centresDirectoryGrid.innerHTML = filtered
+      .map((centre) => {
+        const rating = getCentreRatingStats(centre.id);
+        const sampleTests = centre.tests.slice(0, 3);
+
+        return `
+          <article class="centre-card">
+            <div>
+              <p class="card-meta-line">${escapeHtml(centre.area)} · ${centre.tests.length} Tests Listed</p>
+              <h3 class="card-title">${escapeHtml(centre.name)}</h3>
+              <div class="card-details-list">
+                <span><strong>Address:</strong> ${escapeHtml(centre.address)}</span>
+                <span><strong>Phone:</strong> ${escapeHtml(centre.phone)}</span>
+                <span><strong>Hours:</strong> ${escapeHtml(centre.hours)}</span>
+                <span><strong>Rating:</strong> <span class="rating-star">★</span> ${escapeHtml(rating.label)}</span>
+              </div>
+
+              <div class="centre-tests-preview">
+                ${sampleTests
+                  .map(
+                    (t) => `
+                  <div class="preview-test-row">
+                    <span>${escapeHtml(t.name)}</span>
+                    <span class="preview-test-price tabular-nums">${formatBDT(t.price)}</span>
+                  </div>
+                `
+                  )
+                  .join("")}
+              </div>
+            </div>
+
+            <div class="card-actions-row">
+              <button
+                type="button"
+                class="btn btn-primary btn-sm"
+                data-action="view-details"
+                data-centre-id="${escapeHtml(centre.id)}"
+              >
+                View All ${centre.tests.length} Tests &amp; Book
+              </button>
+            </div>
+          </article>
+        `;
+      })
+      .join("");
+  }
+
+  // --------------------------------------------------------------------------
+  // 13. CENTRE DETAILS MODAL & SAMPLE BOOKING INQUIRY
+  // --------------------------------------------------------------------------
+  function openCentreDetailModal(centreId) {
+    const centre = getCentreById(centreId);
+    if (!centre) return;
+
+    const rating = getCentreRatingStats(centre.id);
+    const visitor = getCurrentVisitor();
+    const categories = [...new Set(centre.tests.map((t) => t.category))].sort();
+
+    dom.detailModalArea.textContent = `${centre.area} · Demonstration Reference Profile`;
+    dom.detailModalTitle.textContent = centre.name;
+
+    dom.centreDetailModalBody.innerHTML = `
+      <div class="detail-summary-grid">
+        <div><strong>Address:</strong> ${escapeHtml(centre.address)}</div>
+        <div><strong>Phone:</strong> ${escapeHtml(centre.phone)}</div>
+        <div><strong>Hours:</strong> ${escapeHtml(centre.hours)}</div>
+        <div><strong>Home Collection:</strong> ${centre.homeCollection ? "Available" : "Walk-in Only"}</div>
+        <div><strong>Patient Rating:</strong> ★ ${escapeHtml(rating.label)}</div>
+        <div><strong>Tests Listed:</strong> ${centre.tests.length} procedures</div>
+      </div>
+
+      <p class="card-subtext"><strong>Service Information:</strong> ${escapeHtml(centre.notes)}</p>
+
+      <h3 class="detail-section-title">Test Price Schedule (৳ BDT)</h3>
+      <div class="detail-filter-row">
+        <input
+          type="text"
+          id="detailTestSearchInput"
+          class="form-input"
+          placeholder="Filter tests inside ${escapeHtml(centre.name)}..."
+        />
+        <select id="detailTestCategorySelect" class="form-select">
+          <option value="all">All Categories</option>
+          ${categories.map((cat) => `<option value="${escapeHtml(cat)}">${escapeHtml(cat)}</option>`).join("")}
+        </select>
+      </div>
+
+      <div class="detail-table-scroll">
+        <table class="detail-tests-table">
+          <thead>
+            <tr>
+              <th>Code</th>
+              <th>Medical Test</th>
+              <th>Category</th>
+              <th>Fee (৳)</th>
+              <th>Save</th>
+            </tr>
+          </thead>
+          <tbody id="detailTestsTableBody"></tbody>
+        </table>
+      </div>
+
+      <div class="booking-inquiry-box">
+        <h3 class="card-heading">Request Test Slot / Sample Collection</h3>
+        <p class="card-subtext">
+          ${visitor ? `Booking as <strong>${escapeHtml(visitor.name)}</strong> — your request will appear in your Visitor Account.` : "Submit an appointment inquiry (sign in as a Visitor to track booking status in your profile)."}
+        </p>
+        <form id="centreBookingForm" class="stacked-form" data-centre-id="${escapeHtml(centre.id)}">
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="bookingPatientName" class="control-label">Patient Name</label>
+              <input
+                type="text"
+                id="bookingPatientName"
+                class="form-input"
+                value="${visitor ? escapeHtml(visitor.name) : ""}"
+                placeholder="Full Name"
+                required
+              />
+            </div>
+            <div class="form-group">
+              <label for="bookingPatientPhone" class="control-label">Mobile Number</label>
+              <input
+                type="text"
+                id="bookingPatientPhone"
+                class="form-input"
+                placeholder="017XXXXXXXX"
+                required
+              />
+            </div>
+          </div>
+          <div class="form-row-2">
+            <div class="form-group">
+              <label for="bookingTestSelect" class="control-label">Select Test</label>
+              <select id="bookingTestSelect" class="form-select">
+                ${centre.tests.map((t) => `<option value="${escapeHtml(t.name)}">${escapeHtml(t.name)} (${formatBDT(t.price)})</option>`).join("")}
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="bookingCollectionSelect" class="control-label">Collection Mode</label>
+              <select id="bookingCollectionSelect" class="form-select">
+                <option value="Walk-in Counter">Walk-in Counter</option>
+                ${centre.homeCollection ? `<option value="Home Sample Collection">Home Sample Collection</option>` : ""}
+              </select>
+            </div>
+          </div>
+          <div class="form-group">
+            <label for="bookingDateInput" class="control-label">Preferred Date</label>
+            <input type="date" id="bookingDateInput" class="form-input" required />
+          </div>
+          <div class="form-feedback" id="bookingFormFeedback" aria-live="polite"></div>
+          <button type="submit" class="btn btn-primary btn-sm">Submit Booking Request</button>
+        </form>
+      </div>
+    `;
+
+    // Render modal test table with live filtering
+    const detailSearch = document.getElementById("detailTestSearchInput");
+    const detailCat = document.getElementById("detailTestCategorySelect");
+    const detailBody = document.getElementById("detailTestsTableBody");
+
+    function renderDetailRows() {
+      const q = detailSearch.value.trim().toLowerCase();
+      const cat = detailCat.value;
+      const filtered = centre.tests.filter((t) => {
+        if (cat !== "all" && t.category !== cat) return false;
+        if (q && !`${t.name} ${t.testId} ${t.prep}`.toLowerCase().includes(q)) return false;
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        detailBody.innerHTML = `<tr><td colspan="5">No matching tests found.</td></tr>`;
+        return;
+      }
+
+      detailBody.innerHTML = filtered
+        .map((t) => {
+          const saved = isTestSavedByVisitor(centre.id, t.testId);
+          return `
+            <tr>
+              <td class="tabular-nums">${escapeHtml(t.testId)}</td>
+              <td>
+                <strong>${escapeHtml(t.name)}</strong>
+                <div class="card-meta-line">${escapeHtml(t.prep)}</div>
+              </td>
+              <td>${escapeHtml(t.category)}</td>
+              <td class="tabular-nums"><strong>${formatBDT(t.price)}</strong></td>
+              <td>
+                <button
+                  type="button"
+                  class="btn btn-outline btn-sm ${saved ? "active" : ""}"
+                  data-action="toggle-save"
+                  data-centre-id="${escapeHtml(centre.id)}"
+                  data-test-id="${escapeHtml(t.testId)}"
+                >
+                  ${saved ? "Saved ★" : "Save"}
+                </button>
+              </td>
+            </tr>
+          `;
+        })
+        .join("");
+    }
+
+    detailSearch.addEventListener("input", renderDetailRows);
+    detailCat.addEventListener("change", renderDetailRows);
+    renderDetailRows();
+
+    // Booking submission handler
+    const bookingForm = document.getElementById("centreBookingForm");
+    const bookingFeedback = document.getElementById("bookingFormFeedback");
+    const dateInput = document.getElementById("bookingDateInput");
+    dateInput.value = new Date().toISOString().split("T")[0];
+
+    bookingForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const patientName = document.getElementById("bookingPatientName").value.trim();
+      const patientPhone = document.getElementById("bookingPatientPhone").value.trim();
+      const testName = document.getElementById("bookingTestSelect").value;
+      const collectionType = document.getElementById("bookingCollectionSelect").value;
+      const preferredDate = dateInput.value;
+
+      if (!patientName || !patientPhone) {
+        setFeedback(bookingFeedback, "Please enter your name and mobile number.", "error");
+        return;
+      }
+
+      const activeVisitor = getCurrentVisitor();
+      const newReq = {
+        id: `req-${Date.now()}`,
+        userId: activeVisitor ? activeVisitor.id : null,
+        patientName,
+        patientPhone,
+        centreId: centre.id,
+        testName,
+        preferredDate,
+        collectionType,
+        status: "Pending",
+        createdAt: new Date().toISOString().split("T")[0],
+      };
+
+      state.bookings.unshift(newReq);
+      saveToStorage(STORAGE_KEYS.bookings, state.bookings);
+      setFeedback(
+        bookingFeedback,
+        "Request submitted! Reference saved (Demo). View status in Visitor Account or Admin Panel.",
+        "success"
+      );
+      bookingForm.reset();
+      dateInput.value = new Date().toISOString().split("T")[0];
+      if (activeVisitor) renderVisitorProfile();
+      if (state.session.role === "admin") renderAdminBookings();
+    });
+
+    openModal(dom.centreDetailModal);
+  }
+
+  // --------------------------------------------------------------------------
+  // 14. PATIENT REVIEWS SECTION
+  // --------------------------------------------------------------------------
+  function updateStarButtons(ratingVal) {
+    state.selectedStarRating = ratingVal;
+    const buttons = dom.starRatingInput.querySelectorAll(".star-btn");
+    buttons.forEach((btn) => {
+      const val = Number(btn.dataset.value);
+      btn.classList.toggle("active", val <= ratingVal);
+    });
+    dom.starRatingValueLabel.textContent =
+      ratingVal > 0 ? `${ratingVal} of 5 stars` : "Select rating";
+  }
+
+  function renderReviewsFeed() {
+    const filterCentre = dom.reviewFilterSelect.value;
+    const filtered = state.reviews.filter(
+      (r) => filterCentre === "all" || r.centreId === filterCentre
+    );
+
+    if (filtered.length === 0) {
+      dom.reviewsFeedList.innerHTML = `<div class="empty-state">No patient reviews yet for this centre.</div>`;
+      return;
+    }
+
+    dom.reviewsFeedList.innerHTML = filtered
+      .map((rev) => {
+        const centre = getCentreById(rev.centreId);
+        const centreName = centre ? `${centre.name} (${centre.area})` : "Diagnostic Centre";
+        const stars = "★".repeat(rev.rating) + "☆".repeat(5 - rev.rating);
+
+        return `
+          <article class="review-item-card">
+            <div class="review-item-top">
+              <span class="review-author">
+                ${escapeHtml(rev.author)}
+                ${rev.verifiedVisitor ? `<span class="card-meta-line">· Member</span>` : ""}
+              </span>
+              <span class="review-stars" aria-label="${rev.rating} out of 5 stars">${stars}</span>
+            </div>
+            <p class="review-centre-meta">${escapeHtml(centreName)} · ${escapeHtml(rev.createdAt)}</p>
+            <p class="review-comment">${escapeHtml(rev.comment)}</p>
+          </article>
+        `;
+      })
+      .join("");
+  }
+
+  // --------------------------------------------------------------------------
+  // 15. VISITOR / PATIENT ACCOUNT WORKSPACE (READ-ONLY CATALOG + PRIVATE ZONE)
+  // --------------------------------------------------------------------------
+  function switchVisitorAuthTab(mode) {
+    const isSignIn = mode === "signin";
+    dom.tabVisitorSignInBtn.classList.toggle("active", isSignIn);
+    dom.tabVisitorSignUpBtn.classList.toggle("active", !isSignIn);
+    dom.visitorSignInForm.hidden = !isSignIn;
+    dom.visitorSignUpForm.hidden = isSignIn;
+    setFeedback(dom.visitorSignInFeedback, "");
+    setFeedback(dom.visitorSignUpFeedback, "");
+  }
+
+  function renderVisitorProfile() {
+    const visitor = getCurrentVisitor();
+    if (!visitor) {
+      dom.visitorAuthView.hidden = false;
+      dom.visitorProfileView.hidden = true;
+      dom.visitorLogoutBtn.hidden = true;
+      dom.accountModalTitle.textContent = "Visitor Sign In & Registration";
+      return;
+    }
+
+    dom.visitorAuthView.hidden = true;
+    dom.visitorProfileView.hidden = false;
+    dom.visitorLogoutBtn.hidden = false;
+    dom.accountModalTitle.textContent = "My Patient & Visitor Account";
+    dom.visitorProfileName.textContent = visitor.name;
+    dom.visitorProfileMeta.textContent = `${visitor.email} · Preferred Area: ${visitor.area} · Role: Visitor`;
+
+    // Render Saved Tests (shows LIVE price updates made by Admin!)
+    const saved = visitor.savedTests || [];
+    if (saved.length === 0) {
+      dom.visitorSavedList.innerHTML = `<p class="card-subtext">No saved tests yet. Click "Save" on any test card to track its price here.</p>`;
+    } else {
+      dom.visitorSavedList.innerHTML = saved
+        .map((entry) => {
+          const centre = getCentreById(entry.centreId);
+          const test = centre ? centre.tests.find((t) => t.testId === entry.testId) : null;
+          if (!centre || !test) return "";
+          return `
+            <div class="admin-item-card">
+              <div>
+                <strong>${escapeHtml(test.name)}</strong>
+                <div class="card-meta-line">${escapeHtml(centre.name)} (${escapeHtml(centre.area)}) · ${escapeHtml(test.testId)}</div>
+                <div class="price-amount" style="font-size:16px;">${formatBDT(test.price)}</div>
+              </div>
+              <div class="admin-item-actions">
+                <button type="button" class="btn btn-outline btn-sm" data-action="view-details" data-centre-id="${escapeHtml(centre.id)}">View</button>
+                <button type="button" class="btn btn-danger-outline btn-sm" data-action="visitor-remove-saved" data-centre-id="${escapeHtml(centre.id)}" data-test-id="${escapeHtml(test.testId)}">Remove</button>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+    }
+
+    // Render Visitor's Own Sample Collection Requests
+    const myRequests = state.bookings.filter((b) => b.userId === visitor.id);
+    if (myRequests.length === 0) {
+      dom.visitorRequestsList.innerHTML = `<p class="card-subtext">No sample requests yet. Open any centre's Details to request a slot.</p>`;
+    } else {
+      dom.visitorRequestsList.innerHTML = myRequests
+        .map((req) => {
+          const centre = getCentreById(req.centreId);
+          return `
+            <div class="admin-item-card">
+              <div>
+                <strong>${escapeHtml(req.testName)}</strong>
+                <div class="card-meta-line">${escapeHtml(centre ? centre.name : "Hospital")} · ${escapeHtml(req.collectionType)}</div>
+                <div class="card-meta-line">Date: ${escapeHtml(req.preferredDate)} · Status: <strong>${escapeHtml(req.status)}</strong></div>
+              </div>
+            </div>
+          `;
+        })
+        .join("");
+    }
+  }
+
+  function toggleVisitorSavedTest(centreId, testId) {
+    const visitor = getCurrentVisitor();
+    if (!visitor) {
+      // Prompt guest to sign in as visitor to use personal Saved Tests
+      switchVisitorAuthTab("signin");
+      renderVisitorProfile();
+      setFeedback(
+        dom.visitorSignInFeedback,
+        "Please sign in or create a free Visitor account to save tests to your shortlist.",
+        "error"
+      );
+      openModal(dom.accountModal);
+      return;
+    }
+
+    if (!Array.isArray(visitor.savedTests)) visitor.savedTests = [];
+    const idx = visitor.savedTests.findIndex(
+      (x) => x.centreId === centreId && x.testId === testId
+    );
+    if (idx >= 0) {
+      visitor.savedTests.splice(idx, 1);
+    } else {
+      visitor.savedTests.push({ centreId, testId });
+    }
+
+    saveToStorage(STORAGE_KEYS.users, state.users);
+    renderComparisonResults();
+    renderVisitorProfile();
+  }
+
+  // --------------------------------------------------------------------------
+  // 16. ADMIN-ONLY DASHBOARD (STRICTLY RESTRICTED TO ADMIN ROLE)
+  // --------------------------------------------------------------------------
+  function syncAdminModalView() {
+    const isAdmin = state.session.role === "admin";
+    dom.adminLoginView.hidden = isAdmin;
+    dom.adminWorkspaceView.hidden = !isAdmin;
+    dom.adminLogoutBtn.hidden = !isAdmin;
+
+    // Show explicit notice if a regular Visitor attempts to open Admin Panel
+    const visitor = getCurrentVisitor();
+    if (!isAdmin && visitor) {
+      dom.adminVisitorBlockedNotice.hidden = false;
+      dom.adminVisitorBlockedNotice.innerHTML =
+        `<strong>Visitor Restriction Active:</strong> You are signed in as Visitor <strong>${escapeHtml(visitor.name)}</strong>. Only Administrators can edit hospital lists, change test prices, or import datasets.`;
+    } else {
+      dom.adminVisitorBlockedNotice.hidden = true;
+    }
+
+    if (isAdmin) {
+      renderAdminCentresList();
+      renderAdminTestsTable();
+      renderAdminReviews();
+      renderAdminBookings();
+    }
+  }
+
+  function switchAdminTab(tabName) {
+    if (!requireAdminRole()) return;
+    state.activeAdminTab = tabName;
+
+    document.querySelectorAll(".admin-tab").forEach((btn) => {
+      btn.classList.toggle("active", btn.dataset.adminTab === tabName);
+    });
+
+    dom.adminTabCentres.hidden = tabName !== "centres";
+    dom.adminTabTests.hidden = tabName !== "tests";
+    dom.adminTabImportExport.hidden = tabName !== "importExport";
+    dom.adminTabReviews.hidden = tabName !== "reviews";
+    dom.adminTabBookings.hidden = tabName !== "bookings";
+  }
+
+  function renderAdminCentresList() {
+    if (!requireAdminRole()) return;
+    dom.adminCentresList.innerHTML = state.centres
+      .map((c) => {
+        const rating = getCentreRatingStats(c.id);
+        return `
+          <div class="admin-item-card">
+            <div>
+              <strong>${escapeHtml(c.name)}</strong>
+              <div class="card-meta-line">${escapeHtml(c.area)} · ${c.tests.length} tests · ★ ${escapeHtml(rating.label)}</div>
+              <div class="card-meta-line">${escapeHtml(c.phone)}</div>
+            </div>
+            <div class="admin-item-actions">
+              <button type="button" class="btn btn-outline btn-sm" data-admin-action="edit-centre" data-centre-id="${escapeHtml(c.id)}">Edit</button>
+              <button type="button" class="btn btn-danger-outline btn-sm" data-admin-action="delete-centre" data-centre-id="${escapeHtml(c.id)}">Delete</button>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  function getFilteredAdminTestRows() {
+    const centreFilter = dom.adminTestFilterCentre.value;
+    const catFilter = dom.adminTestFilterCategory.value;
+    const q = dom.adminTestSearchInput.value.trim().toLowerCase();
+
+    return getFlattenedTestListings().filter((item) => {
+      if (centreFilter !== "all" && item.centreId !== centreFilter) return false;
+      if (catFilter !== "all" && item.category !== catFilter) return false;
+      if (q && !`${item.testName} ${item.testId} ${item.centreName}`.toLowerCase().includes(q)) return false;
+      return true;
+    });
+  }
+
+  function renderAdminTestsTable() {
+    if (!requireAdminRole()) return;
+    const rows = getFilteredAdminTestRows();
+    const total = rows.length;
+    const totalPages = Math.max(1, Math.ceil(total / ADMIN_TESTS_PAGE_SIZE));
+    if (state.adminTestsPage > totalPages) state.adminTestsPage = totalPages;
+
+    const startIdx = (state.adminTestsPage - 1) * ADMIN_TESTS_PAGE_SIZE;
+    const pageRows = rows.slice(startIdx, startIdx + ADMIN_TESTS_PAGE_SIZE);
+
+    dom.adminTestsCountMeta.textContent = `Showing ${pageRows.length} of ${total} test rows`;
+    dom.adminTestsPageInfo.textContent = `Page ${state.adminTestsPage} of ${totalPages}`;
+    dom.adminTestsPrevBtn.disabled = state.adminTestsPage <= 1;
+    dom.adminTestsNextBtn.disabled = state.adminTestsPage >= totalPages;
+
+    if (pageRows.length === 0) {
+      dom.adminTestsTableBody.innerHTML = `<tr><td colspan="4">No matching tests found.</td></tr>`;
+      return;
+    }
+
+    dom.adminTestsTableBody.innerHTML = pageRows
+      .map((item) => {
+        const modKey = `${item.centreId}::${item.testId}`;
+        const hasMod = Object.prototype.hasOwnProperty.call(state.modifiedPrices, modKey);
+        const inputVal = hasMod ? state.modifiedPrices[modKey] : item.price;
+
+        return `
+          <tr>
+            <td>
+              <strong>${escapeHtml(item.centreName)}</strong>
+              <div class="card-meta-line">${escapeHtml(item.area)}</div>
+            </td>
+            <td>
+              <strong>${escapeHtml(item.testName)}</strong>
+              <div class="card-meta-line">${escapeHtml(item.testId)} · ${escapeHtml(item.category)}</div>
+            </td>
+            <td>
+              <input
+                type="number"
+                min="0"
+                step="10"
+                class="inline-price-input ${hasMod ? "is-modified" : ""}"
+                value="${escapeHtml(inputVal)}"
+                data-price-key="${escapeHtml(modKey)}"
+                data-original-price="${escapeHtml(item.price)}"
+                aria-label="Price in BDT for ${escapeHtml(item.testName)}"
+              />
+            </td>
+            <td>
+              <div class="admin-item-actions">
+                <button
+                  type="button"
+                  class="btn btn-outline btn-sm"
+                  data-admin-action="save-single-price"
+                  data-centre-id="${escapeHtml(item.centreId)}"
+                  data-test-id="${escapeHtml(item.testId)}"
+                >
+                  Save
+                </button>
+                <button
+                  type="button"
+                  class="btn btn-danger-outline btn-sm"
+                  data-admin-action="delete-test"
+                  data-centre-id="${escapeHtml(item.centreId)}"
+                  data-test-id="${escapeHtml(item.testId)}"
+                >
+                  Delete
+                </button>
+              </div>
+            </td>
+          </tr>
+        `;
+      })
+      .join("");
+  }
+
+  function renderAdminReviews() {
+    if (!requireAdminRole()) return;
+    if (state.reviews.length === 0) {
+      dom.adminReviewsList.innerHTML = `<p class="card-subtext">No submitted reviews.</p>`;
+      return;
+    }
+
+    dom.adminReviewsList.innerHTML = state.reviews
+      .map((r) => {
+        const centre = getCentreById(r.centreId);
+        return `
+          <div class="admin-item-card">
+            <div>
+              <strong>${escapeHtml(r.author)}</strong> · ★ ${r.rating}/5
+              <div class="card-meta-line">${escapeHtml(centre ? centre.name : "Centre")} · ${escapeHtml(r.createdAt)}</div>
+              <p class="review-comment">${escapeHtml(r.comment)}</p>
+            </div>
+            <div class="admin-item-actions">
+              <button type="button" class="btn btn-danger-outline btn-sm" data-admin-action="delete-review" data-review-id="${escapeHtml(r.id)}">Delete</button>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  function renderAdminBookings() {
+    if (!requireAdminRole()) return;
+    if (state.bookings.length === 0) {
+      dom.adminBookingsList.innerHTML = `<p class="card-subtext">No patient booking requests submitted yet.</p>`;
+      return;
+    }
+
+    dom.adminBookingsList.innerHTML = state.bookings
+      .map((b) => {
+        const centre = getCentreById(b.centreId);
+        return `
+          <div class="admin-item-card">
+            <div>
+              <strong>${escapeHtml(b.patientName)}</strong> (${escapeHtml(b.patientPhone)})
+              <div class="card-meta-line">${escapeHtml(centre ? centre.name : "Hospital")} · <strong>${escapeHtml(b.testName)}</strong></div>
+              <div class="card-meta-line">${escapeHtml(b.collectionType)} · Preferred Date: ${escapeHtml(b.preferredDate)}</div>
+            </div>
+            <div class="admin-item-actions">
+              <select
+                class="form-select"
+                style="min-height:36px; width:auto;"
+                data-admin-booking-status="${escapeHtml(b.id)}"
+                aria-label="Booking status"
+              >
+                <option value="Pending" ${b.status === "Pending" ? "selected" : ""}>Pending</option>
+                <option value="Confirmed" ${b.status === "Confirmed" ? "selected" : ""}>Confirmed</option>
+                <option value="Completed" ${b.status === "Completed" ? "selected" : ""}>Completed</option>
+              </select>
+              <button type="button" class="btn btn-danger-outline btn-sm" data-admin-action="delete-booking" data-booking-id="${escapeHtml(b.id)}">Remove</button>
+            </div>
+          </div>
+        `;
+      })
+      .join("");
+  }
+
+  // --------------------------------------------------------------------------
+  // 17. EXCEL (.XLSX) / CSV / JSON EXPORT & IMPORT (ADMIN ONLY)
+  // --------------------------------------------------------------------------
+  function buildExportRows() {
+    const rows = [];
+    state.centres.forEach((c) => {
+      c.tests.forEach((t) => {
+        rows.push({
+          test_id: t.testId,
+          diagnostic_centre: c.name,
+          branch_name: c.area,
+          test_name: t.name,
+          normalized_category: t.category,
+          price_bdt: Number(t.price),
+          prep_note: t.prep || "",
+        });
+      });
+    });
+    return rows;
+  }
+
+  function triggerDownload(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  }
+
+  function parseCsvText(text) {
+    const lines = text.replace(/\r\n/g, "\n").replace(/\r/g, "\n").split("\n").filter((l) => l.trim());
+    if (lines.length < 2) return [];
+
+    const parseLine = (line) => {
+      const cells = [];
+      let cur = "";
+      let inQuotes = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (ch === '"') {
+          if (inQuotes && line[i + 1] === '"') {
+            cur += '"';
+            i++;
+          } else {
+            inQuotes = !inQuotes;
+          }
+        } else if (ch === "," && !inQuotes) {
+          cells.push(cur.trim());
+          cur = "";
+        } else {
+          cur += ch;
+        }
+      }
+      cells.push(cur.trim());
+      return cells;
+    };
+
+    const headers = parseLine(lines[0]).map((h) => h.toLowerCase().trim());
+    const rows = [];
+    for (let i = 1; i < lines.length; i++) {
+      const values = parseLine(lines[i]);
+      const obj = {};
+      headers.forEach((h, idx) => {
+        obj[h] = values[idx] !== undefined ? values[idx] : "";
+      });
+      rows.push(obj);
+    }
+    return rows;
+  }
+
+  // Applies normalized import rows by matching test_id or (diagnostic_centre + test_name)
+  function applyImportedRows(rawRows) {
+    if (!requireAdminRole(dom.adminImportFeedback)) return { updated: 0, added: 0 };
+
+    let updated = 0;
+    let added = 0;
+
+    rawRows.forEach((row) => {
+      // Normalize flexible column headers
+      const norm = {};
+      Object.keys(row).forEach((k) => {
+        norm[k.toLowerCase().trim()] = row[k];
+      });
+
+      const testId = String(norm.test_id || norm.testid || "").trim();
+      const centreName = String(norm.diagnostic_centre || norm.hospital || norm.centre || "").trim();
+      const branch = String(norm.branch_name || norm.area || "Dhaka").trim();
+      const testName = String(norm.test_name || norm.test || "").trim();
+      const category = String(norm.normalized_category || norm.category || "General Diagnostics").trim();
+      const price = Number(norm.price_bdt ?? norm.price ?? NaN);
+      const prep = String(norm.prep_note || norm.prep || "Standard laboratory preparation").trim();
+
+      if (!Number.isFinite(price) || price < 0) return;
+
+      // 1) Try matching existing test by exact test_id anywhere
+      if (testId) {
+        let matched = false;
+        for (const c of state.centres) {
+          const existing = c.tests.find((t) => t.testId.toLowerCase() === testId.toLowerCase());
+          if (existing) {
+            existing.price = Math.round(price);
+            if (testName) existing.name = testName;
+            if (category) existing.category = category;
+            if (norm.prep_note) existing.prep = prep;
+            updated++;
+            matched = true;
+            break;
+          }
+        }
+        if (matched) return;
+      }
+
+      // 2) Otherwise find or create hospital and add/update test by testName
+      if (!centreName || !testName) return;
+      let targetCentre = state.centres.find(
+        (c) => c.name.toLowerCase() === centreName.toLowerCase()
+      );
+      if (!targetCentre) {
+        targetCentre = {
+          id: `centre-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+          name: centreName,
+          area: branch,
+          address: `${branch}, Bangladesh`,
+          phone: "+880 1700-000000 (Demo)",
+          hours: "8:00 AM – 10:00 PM",
+          homeCollection: true,
+          notes: "Added via Admin dataset import.",
+          tests: [],
+        };
+        state.centres.push(targetCentre);
+      }
+
+      const existingByName = targetCentre.tests.find(
+        (t) => t.name.toLowerCase() === testName.toLowerCase()
+      );
+      if (existingByName) {
+        existingByName.price = Math.round(price);
+        if (category) existingByName.category = category;
+        updated++;
+      } else {
+        targetCentre.tests.push({
+          testId: testId || `IMP-${targetCentre.tests.length + 1}`,
+          name: testName,
+          category,
+          price: Math.round(price),
+          prep,
+        });
+        added++;
+      }
+    });
+
+    saveToStorage(STORAGE_KEYS.centres, state.centres);
+    refreshAllUI();
+    return { updated, added };
+  }
+
+  // --------------------------------------------------------------------------
+  // 18. FULL UI REFRESH
+  // --------------------------------------------------------------------------
+  function refreshAllUI() {
+    updateRoleUI();
+    populateSelectOptions();
+    renderStats();
+    renderHeroSnapshot();
+    renderComparisonResults();
+    renderCompareTray();
+    renderDirectoryAreaTabs();
+    renderCentresDirectory();
+    renderReviewsFeed();
+    renderVisitorProfile();
+    if (state.session.role === "admin") {
+      renderAdminCentresList();
+      renderAdminTestsTable();
+      renderAdminReviews();
+      renderAdminBookings();
+    }
+  }
+
+  // --------------------------------------------------------------------------
+  // 19. EVENT LISTENERS
+  // --------------------------------------------------------------------------
+  function bindEvents() {
+    // Mobile Nav Drawer
+    dom.mobileMenuBtn.addEventListener("click", () => {
+      const isHidden = dom.mobileNavDrawer.hidden;
+      dom.mobileNavDrawer.hidden = !isHidden;
+      dom.mobileMenuBtn.setAttribute("aria-expanded", String(isHidden));
+    });
+
+    dom.mobileNavDrawer.addEventListener("click", (e) => {
+      if (e.target.matches(".mobile-nav-link")) {
+        dom.mobileNavDrawer.hidden = true;
+        dom.mobileMenuBtn.setAttribute("aria-expanded", "false");
+      }
+    });
+
+    // Open Visitor Account Modal
+    const handleOpenAccount = () => {
+      dom.mobileNavDrawer.hidden = true;
+      renderVisitorProfile();
+      openModal(dom.accountModal);
+    };
+    dom.openAccountBtn.addEventListener("click", handleOpenAccount);
+    dom.mobileAccountBtn.addEventListener("click", handleOpenAccount);
+
+    // Open Admin Login / Dashboard Modal
+    const handleOpenAdmin = () => {
+      dom.mobileNavDrawer.hidden = true;
+      syncAdminModalView();
+      openModal(dom.adminModal);
+    };
+    dom.openAdminBtn.addEventListener("click", handleOpenAdmin);
+    dom.mobileAdminBtn.addEventListener("click", handleOpenAdmin);
+
+    // Close modals via close button, backdrop click, or Escape key
+    document.addEventListener("click", (e) => {
+      const closeBtn = e.target.closest("[data-close-modal]");
+      if (closeBtn) {
+        closeModal(document.getElementById(closeBtn.dataset.closeModal));
+        return;
+      }
+      if (e.target.classList.contains("modal-backdrop")) {
+        closeModal(e.target);
+      }
+    });
+
+    document.addEventListener("keydown", (e) => {
+      if (e.key === "Escape") {
+        document.querySelectorAll(".modal-backdrop:not([hidden])").forEach(closeModal);
+      }
+    });
+
+    // Legal Modals
+    document.querySelectorAll("[data-legal-modal]").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const type = btn.dataset.legalModal;
+        if (type === "privacy") {
+          dom.legalModalTitle.textContent = "Privacy Policy (Demonstration)";
+          dom.legalModalBody.innerHTML = `
+            <p class="card-subtext">MediCompare BD runs locally in your browser using <strong>localStorage</strong>. Visitor registrations, saved tests, reviews, and booking requests stay on your device and are not transmitted to an external server.</p>
+          `;
+        } else {
+          dom.legalModalTitle.textContent = "Medical & Pricing Disclaimer";
+          dom.legalModalBody.innerHTML = `
+            <p class="card-subtext">All diagnostic test fees in Bangladeshi Taka (৳), hospital schedules, and ratings shown in this application are reference demonstration figures. MediCompare BD does not provide medical advice or certify laboratory accreditation. Always verify official charges with the diagnostic centre prior to testing.</p>
+          `;
+        }
+        openModal(dom.legalModal);
+      });
+    });
+
+    // Hero Autocomplete & Search
+    dom.heroTestInput.addEventListener("input", () => {
+      const q = dom.heroTestInput.value.trim().toLowerCase();
+      if (!q) {
+        dom.heroAutocompleteList.hidden = true;
+        return;
+      }
+      const matches = getUniqueTestsWithCategory()
+        .filter((t) => t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q))
+        .slice(0, 8);
+
+      if (matches.length === 0) {
+        dom.heroAutocompleteList.hidden = true;
+        return;
+      }
+
+      dom.heroAutocompleteList.innerHTML = matches
+        .map(
+          (m) => `
+          <li class="autocomplete-item" role="option" data-test-name="${escapeHtml(m.name)}">
+            <span>${escapeHtml(m.name)}</span>
+            <span class="autocomplete-category">${escapeHtml(m.category)}</span>
+          </li>
+        `
+        )
+        .join("");
+      dom.heroAutocompleteList.hidden = false;
+    });
+
+    dom.heroAutocompleteList.addEventListener("click", (e) => {
+      const li = e.target.closest(".autocomplete-item");
+      if (!li) return;
+      dom.heroTestInput.value = li.dataset.testName;
+      dom.heroAutocompleteList.hidden = true;
+    });
+
+    document.addEventListener("click", (e) => {
+      if (!e.target.closest(".autocomplete-wrapper")) {
+        dom.heroAutocompleteList.hidden = true;
+      }
+    });
+
+    dom.heroSearchForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const q = dom.heroTestInput.value.trim();
+      const area = dom.heroAreaSelect.value;
+
+      dom.compareAreaSelect.value = area;
+      // Match exact test dropdown if possible, otherwise keyword
+      const exactOption = [...dom.compareTestSelect.options].find(
+        (opt) => opt.value.toLowerCase() === q.toLowerCase()
+      );
+      if (exactOption) {
+        dom.compareTestSelect.value = exactOption.value;
+        dom.compareKeywordInput.value = "";
+      } else {
+        dom.compareTestSelect.value = "all";
+        dom.compareKeywordInput.value = q;
+      }
+
+      state.comparePage = 1;
+      renderComparisonResults();
+      document.getElementById("compare-tests").scrollIntoView({ behavior: "smooth" });
+    });
+
+    // Quick Test Buttons
+    dom.quickTestButtons.addEventListener("click", (e) => {
+      const btn = e.target.closest(".quick-test-btn");
+      if (!btn) return;
+      const testVal = btn.dataset.test;
+      dom.compareCentreSelect.value = "all";
+      dom.compareCategorySelect.value = "all";
+      dom.compareAreaSelect.value = "all";
+
+      const exact = [...dom.compareTestSelect.options].find((o) => o.value === testVal);
+      if (exact) {
+        dom.compareTestSelect.value = testVal;
+        dom.compareKeywordInput.value = "";
+      } else {
+        dom.compareTestSelect.value = "all";
+        dom.compareKeywordInput.value = testVal;
+      }
+      state.comparePage = 1;
+      renderComparisonResults();
+      document.getElementById("compare-tests").scrollIntoView({ behavior: "smooth" });
+    });
+
+    // Comparison Filters & Sort
+    [
+      dom.compareCentreSelect,
+      dom.compareCategorySelect,
+      dom.compareTestSelect,
+      dom.compareAreaSelect,
+      dom.compareSortSelect,
+    ].forEach((el) => {
+      el.addEventListener("change", () => {
+        state.comparePage = 1;
+        renderComparisonResults();
+      });
+    });
+
+    dom.compareKeywordInput.addEventListener("input", () => {
+      state.comparePage = 1;
+      renderComparisonResults();
+    });
+
+    dom.resetComparisonFiltersBtn.addEventListener("click", () => {
+      dom.compareCentreSelect.value = "all";
+      dom.compareCategorySelect.value = "all";
+      dom.compareTestSelect.value = "all";
+      dom.compareAreaSelect.value = "all";
+      dom.compareKeywordInput.value = "";
+      dom.compareSortSelect.value = "price-asc";
+      state.comparePage = 1;
+      renderComparisonResults();
+    });
+
+    dom.comparePrevPageBtn.addEventListener("click", () => {
+      if (state.comparePage > 1) {
+        state.comparePage--;
+        renderComparisonResults();
+      }
+    });
+
+    dom.compareNextPageBtn.addEventListener("click", () => {
+      state.comparePage++;
+      renderComparisonResults();
+    });
+
+    dom.clearCompareTrayBtn.addEventListener("click", () => {
+      state.compareTray = [];
+      renderCompareTray();
+      renderComparisonResults();
+    });
+
+    // Global delegated clicks for Compare, Save, Details, Visitor Remove
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-action]");
+      if (!btn) return;
+      const action = btn.dataset.action;
+      const centreId = btn.dataset.centreId;
+      const testId = btn.dataset.testId;
+
+      if (action === "toggle-compare") {
+        const idx = state.compareTray.findIndex(
+          (x) => x.centreId === centreId && x.testId === testId
+        );
+        if (idx >= 0) {
+          state.compareTray.splice(idx, 1);
+        } else {
+          if (state.compareTray.length >= 3) {
+            state.compareTray.shift(); // keep max 3
+          }
+          state.compareTray.push({ centreId, testId });
+        }
+        renderCompareTray();
+        renderComparisonResults();
+      } else if (action === "remove-compare") {
+        state.compareTray = state.compareTray.filter(
+          (x) => !(x.centreId === centreId && x.testId === testId)
+        );
+        renderCompareTray();
+        renderComparisonResults();
+      } else if (action === "toggle-save" || action === "visitor-remove-saved") {
+        toggleVisitorSavedTest(centreId, testId);
+        // If detail modal is open, refresh its save buttons
+        if (!dom.centreDetailModal.hidden) {
+          btn.classList.toggle("active");
+          btn.textContent = isTestSavedByVisitor(centreId, testId) ? "Saved ★" : "Save";
+        }
+      } else if (action === "view-details") {
+        closeModal(dom.accountModal);
+        openCentreDetailModal(centreId);
+      }
+    });
+
+    // Directory Area Tabs
+    dom.centreAreaTabs.addEventListener("click", (e) => {
+      const tab = e.target.closest(".area-tab");
+      if (!tab) return;
+      state.activeDirectoryArea = tab.dataset.areaTab;
+      renderDirectoryAreaTabs();
+      renderCentresDirectory();
+    });
+
+    // Star Rating & Patient Review Form
+    dom.starRatingInput.addEventListener("click", (e) => {
+      const starBtn = e.target.closest(".star-btn");
+      if (!starBtn) return;
+      updateStarButtons(Number(starBtn.dataset.value));
+    });
+
+    dom.reviewForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const centreId = dom.reviewCentreSelect.value;
+      const author = dom.reviewerNameInput.value.trim();
+      const comment = dom.reviewCommentInput.value.trim();
+      const rating = state.selectedStarRating;
+
+      if (!rating) {
+        setFeedback(dom.reviewFormFeedback, "Please select a 1–5 star rating.", "error");
+        return;
+      }
+      if (!author || !comment) {
+        setFeedback(dom.reviewFormFeedback, "Please enter your name and a short review.", "error");
+        return;
+      }
+
+      const visitor = getCurrentVisitor();
+      state.reviews.unshift({
+        id: `rev-${Date.now()}`,
+        centreId,
+        author,
+        rating,
+        comment,
+        createdAt: new Date().toISOString().split("T")[0],
+        verifiedVisitor: Boolean(visitor),
+      });
+
+      saveToStorage(STORAGE_KEYS.reviews, state.reviews);
+      dom.reviewCommentInput.value = "";
+      updateStarButtons(0);
+      setFeedback(dom.reviewFormFeedback, "Thank you! Your review has been posted.", "success");
+      refreshAllUI();
+    });
+
+    dom.reviewFilterSelect.addEventListener("change", renderReviewsFeed);
+
+    // ----------------------------------------------------------------------
+    // VISITOR SIGN IN / SIGN UP / SIGN OUT
+    // ----------------------------------------------------------------------
+    dom.tabVisitorSignInBtn.addEventListener("click", () => switchVisitorAuthTab("signin"));
+    dom.tabVisitorSignUpBtn.addEventListener("click", () => switchVisitorAuthTab("signup"));
+
+    dom.fillDemoVisitorBtn.addEventListener("click", () => {
+      dom.visitorLoginEmailInput.value = "patient@demo.bd";
+      dom.visitorLoginPassInput.value = "patient123";
+    });
+
+    dom.visitorSignInForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const email = dom.visitorLoginEmailInput.value.trim().toLowerCase();
+      const pass = dom.visitorLoginPassInput.value;
+
+      const user = state.users.find(
+        (u) => u.email.toLowerCase() === email && u.pass === pass
+      );
+      if (!user) {
+        setFeedback(dom.visitorSignInFeedback, "Invalid email/mobile or password.", "error");
+        return;
+      }
+
+      // Visitor login NEVER grants admin privileges
+      state.session = { role: "visitor", userId: user.id, name: user.name };
+      saveToStorage(STORAGE_KEYS.session, state.session);
+      setFeedback(dom.visitorSignInFeedback, "");
+      refreshAllUI();
+    });
+
+    dom.visitorSignUpForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const name = dom.visitorRegNameInput.value.trim();
+      const email = dom.visitorRegEmailInput.value.trim();
+      const area = dom.visitorRegAreaSelect.value;
+      const pass = dom.visitorRegPassInput.value;
+
+      if (!name || !email || pass.length < 6) {
+        setFeedback(
+          dom.visitorSignUpFeedback,
+          "Enter your name, email/mobile, and a password of at least 6 characters.",
+          "error"
+        );
+        return;
+      }
+
+      if (state.users.some((u) => u.email.toLowerCase() === email.toLowerCase())) {
+        setFeedback(
+          dom.visitorSignUpFeedback,
+          "An account with this email or mobile already exists. Please Sign In.",
+          "error"
+        );
+        return;
+      }
+
+      const newUser = {
+        id: `user-${Date.now()}`,
+        role: "visitor",
+        name,
+        email,
+        pass,
+        area,
+        savedTests: [],
+      };
+
+      state.users.push(newUser);
+      saveToStorage(STORAGE_KEYS.users, state.users);
+
+      state.session = { role: "visitor", userId: newUser.id, name: newUser.name };
+      saveToStorage(STORAGE_KEYS.session, state.session);
+      dom.visitorSignUpForm.reset();
+      refreshAllUI();
+    });
+
+    dom.visitorLogoutBtn.addEventListener("click", () => {
+      state.session = { role: "guest", userId: null, name: "" };
+      saveToStorage(STORAGE_KEYS.session, state.session);
+      refreshAllUI();
+    });
+
+    // ----------------------------------------------------------------------
+    // ADMIN LOGIN / LOGOUT & CRUD OPERATIONS
+    // ----------------------------------------------------------------------
+    dom.fillDemoAdminBtn.addEventListener("click", () => {
+      dom.adminUsernameInput.value = ADMIN_CREDENTIALS.username;
+      dom.adminPasscodeInput.value = ADMIN_CREDENTIALS.passcode;
+    });
+
+    dom.adminLoginForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      const username = dom.adminUsernameInput.value.trim();
+      const passcode = dom.adminPasscodeInput.value;
+
+      if (
+        username === ADMIN_CREDENTIALS.username &&
+        passcode === ADMIN_CREDENTIALS.passcode
+      ) {
+        state.session = { role: "admin", userId: "admin", name: "Administrator" };
+        saveToStorage(STORAGE_KEYS.session, state.session);
+        setFeedback(dom.adminLoginFeedback, "");
+        dom.adminLoginForm.reset();
+        updateRoleUI();
+        syncAdminModalView();
+        switchAdminTab(state.activeAdminTab);
+      } else {
+        setFeedback(
+          dom.adminLoginFeedback,
+          "Invalid Administrator credentials. Visitor accounts cannot log in here.",
+          "error"
+        );
+      }
+    });
+
+    dom.adminLogoutBtn.addEventListener("click", () => {
+      state.session = { role: "guest", userId: null, name: "" };
+      state.modifiedPrices = {};
+      saveToStorage(STORAGE_KEYS.session, state.session);
+      updateRoleUI();
+      syncAdminModalView();
+    });
+
+    // Admin Tabs
+    document.querySelectorAll(".admin-tab").forEach((tabBtn) => {
+      tabBtn.addEventListener("click", () => switchAdminTab(tabBtn.dataset.adminTab));
+    });
+
+    // Add / Edit Diagnostic Centre
+    dom.adminCentreForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (!requireAdminRole(dom.adminCentreFeedback)) return;
+
+      const editId = dom.editCentreId.value;
+      const name = dom.centreNameInput.value.trim();
+      const area = dom.centreAreaInput.value.trim();
+      const phone = dom.centrePhoneInput.value.trim();
+      const address = dom.centreAddressInput.value.trim();
+      const hours = dom.centreHoursInput.value.trim();
+      const homeCollection = dom.centreHomeCollectionSelect.value === "true";
+      const notes = dom.centreNotesInput.value.trim();
+
+      if (!name || !area || !phone || !address) {
+        setFeedback(dom.adminCentreFeedback, "Please fill all required hospital fields.", "error");
+        return;
+      }
+
+      if (editId) {
+        const centre = getCentreById(editId);
+        if (centre) {
+          centre.name = name;
+          centre.area = area;
+          centre.phone = phone;
+          centre.address = address;
+          centre.hours = hours;
+          centre.homeCollection = homeCollection;
+          centre.notes = notes;
+        }
+        setFeedback(dom.adminCentreFeedback, "Hospital information updated.", "success");
+      } else {
+        state.centres.push({
+          id: `centre-${Date.now()}`,
+          name,
+          area,
+          address,
+          phone,
+          hours,
+          homeCollection,
+          notes,
+          tests: [
+            {
+              testId: `NEW-001`,
+              name: "ECG",
+              category: "Cardiology",
+              price: 350,
+              prep: "No fasting needed · Report in 30 mins",
+            },
+          ],
+        });
+        setFeedback(dom.adminCentreFeedback, "New diagnostic centre added.", "success");
+      }
+
+      saveToStorage(STORAGE_KEYS.centres, state.centres);
+      resetCentreForm();
+      refreshAllUI();
+    });
+
+    function resetCentreForm() {
+      dom.editCentreId.value = "";
+      dom.adminCentreForm.reset();
+      dom.centreHoursInput.value = "7:30 AM – 10:00 PM";
+      dom.adminCentreFormTitle.textContent = "Add Diagnostic Centre";
+      dom.adminCentreSubmitBtn.textContent = "Add Centre";
+      dom.cancelEditCentreBtn.hidden = true;
+    }
+
+    dom.cancelEditCentreBtn.addEventListener("click", resetCentreForm);
+
+    // Reset Dataset (Admin Only)
+    dom.resetDemoDataBtn.addEventListener("click", () => {
+      if (!requireAdminRole(dom.adminCentreFeedback)) return;
+      state.centres = buildDefaultCentres();
+      state.reviews = [...DEFAULT_REVIEWS];
+      state.modifiedPrices = {};
+      saveToStorage(STORAGE_KEYS.centres, state.centres);
+      saveToStorage(STORAGE_KEYS.reviews, state.reviews);
+      resetCentreForm();
+      setFeedback(
+        dom.adminCentreFeedback,
+        "Restored default 6 hospitals and 300 reference tests.",
+        "success"
+      );
+      refreshAllUI();
+    });
+
+    // Admin Add / Update Single Test
+    dom.adminTestForm.addEventListener("submit", (e) => {
+      e.preventDefault();
+      if (!requireAdminRole(dom.adminTestFeedback)) return;
+
+      const targetCentreId = dom.testCentreSelect.value;
+      const testName = dom.newTestNameInput.value.trim();
+      const category = dom.newTestCategorySelect.value;
+      const price = Number(dom.newTestPriceInput.value);
+      const prep = dom.newTestPrepInput.value.trim() || "Standard lab prep · Same-day report";
+      const applyAll = dom.applyTestAllCentres.checked;
+
+      if (!testName || !Number.isFinite(price) || price < 0) {
+        setFeedback(dom.adminTestFeedback, "Enter a valid test name and price in ৳.", "error");
+        return;
+      }
+
+      const targets = applyAll ? state.centres : [getCentreById(targetCentreId)].filter(Boolean);
+      targets.forEach((centre) => {
+        const existing = centre.tests.find(
+          (t) => t.name.toLowerCase() === testName.toLowerCase()
+        );
+        if (existing) {
+          existing.price = Math.round(price);
+          existing.category = category;
+          existing.prep = prep;
+        } else {
+          centre.tests.unshift({
+            testId: `${centre.name.slice(0, 3).toUpperCase()}-${centre.tests.length + 101}`,
+            name: testName,
+            category,
+            price: Math.round(price),
+            prep,
+          });
+        }
+      });
+
+      saveToStorage(STORAGE_KEYS.centres, state.centres);
+      dom.adminTestForm.reset();
+      setFeedback(
+        dom.adminTestFeedback,
+        applyAll
+          ? `Added/updated "${testName}" across all ${targets.length} hospitals.`
+          : `Saved "${testName}" at ${formatBDT(price)}.`,
+        "success"
+      );
+      refreshAllUI();
+    });
+
+    // Admin Bulk Price Input Tracking & Filtering
+    [dom.adminTestFilterCentre, dom.adminTestFilterCategory].forEach((el) => {
+      el.addEventListener("change", () => {
+        state.adminTestsPage = 1;
+        renderAdminTestsTable();
+      });
+    });
+
+    dom.adminTestSearchInput.addEventListener("input", () => {
+      state.adminTestsPage = 1;
+      renderAdminTestsTable();
+    });
+
+    dom.adminTestsPrevBtn.addEventListener("click", () => {
+      if (state.adminTestsPage > 1) {
+        state.adminTestsPage--;
+        renderAdminTestsTable();
+      }
+    });
+
+    dom.adminTestsNextBtn.addEventListener("click", () => {
+      state.adminTestsPage++;
+      renderAdminTestsTable();
+    });
+
+    dom.adminTestsTableBody.addEventListener("input", (e) => {
+      const input = e.target.closest(".inline-price-input");
+      if (!input) return;
+      const key = input.dataset.priceKey;
+      const orig = Number(input.dataset.originalPrice);
+      const val = Number(input.value);
+      if (Number.isFinite(val) && val !== orig) {
+        state.modifiedPrices[key] = val;
+        input.classList.add("is-modified");
+      } else {
+        delete state.modifiedPrices[key];
+        input.classList.remove("is-modified");
+      }
+    });
+
+    dom.adminSaveAllPricesBtn.addEventListener("click", () => {
+      if (!requireAdminRole(dom.adminBulkPriceFeedback)) return;
+      const keys = Object.keys(state.modifiedPrices);
+      if (keys.length === 0) {
+        setFeedback(dom.adminBulkPriceFeedback, "No modified prices to save.", "error");
+        return;
+      }
+
+      let count = 0;
+      keys.forEach((key) => {
+        const [centreId, testId] = key.split("::");
+        const newPrice = Number(state.modifiedPrices[key]);
+        if (!Number.isFinite(newPrice) || newPrice < 0) return;
+        const centre = getCentreById(centreId);
+        const test = centre ? centre.tests.find((t) => t.testId === testId) : null;
+        if (test) {
+          test.price = Math.round(newPrice);
+          count++;
+        }
+      });
+
+      state.modifiedPrices = {};
+      saveToStorage(STORAGE_KEYS.centres, state.centres);
+      setFeedback(
+        dom.adminBulkPriceFeedback,
+        `Saved ${count} updated price${count === 1 ? "" : "s"} successfully.`,
+        "success"
+      );
+      refreshAllUI();
+    });
+
+    // Delegated Admin Actions (Edit/Delete Centre, Single Test Save/Delete, Delete Review, Delete Booking)
+    dom.adminWorkspaceView.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-admin-action]");
+      if (!btn) return;
+      if (!requireAdminRole()) return;
+
+      const action = btn.dataset.adminAction;
+      const centreId = btn.dataset.centreId;
+      const testId = btn.dataset.testId;
+
+      if (action === "edit-centre") {
+        const c = getCentreById(centreId);
+        if (!c) return;
+        dom.editCentreId.value = c.id;
+        dom.centreNameInput.value = c.name;
+        dom.centreAreaInput.value = c.area;
+        dom.centrePhoneInput.value = c.phone;
+        dom.centreAddressInput.value = c.address;
+        dom.centreHoursInput.value = c.hours;
+        dom.centreHomeCollectionSelect.value = String(c.homeCollection);
+        dom.centreNotesInput.value = c.notes;
+        dom.adminCentreFormTitle.textContent = `Editing: ${c.name}`;
+        dom.adminCentreSubmitBtn.textContent = "Update Centre";
+        dom.cancelEditCentreBtn.hidden = false;
+      } else if (action === "delete-centre") {
+        if (state.centres.length <= 1) {
+          setFeedback(dom.adminCentreFeedback, "At least one hospital must remain.", "error");
+          return;
+        }
+        state.centres = state.centres.filter((c) => c.id !== centreId);
+        state.reviews = state.reviews.filter((r) => r.centreId !== centreId);
+        saveToStorage(STORAGE_KEYS.centres, state.centres);
+        saveToStorage(STORAGE_KEYS.reviews, state.reviews);
+        refreshAllUI();
+      } else if (action === "save-single-price") {
+        const modKey = `${centreId}::${testId}`;
+        const input = dom.adminTestsTableBody.querySelector(`[data-price-key="${modKey}"]`);
+        const val = Number(input ? input.value : NaN);
+        if (!Number.isFinite(val) || val < 0) return;
+        const centre = getCentreById(centreId);
+        const test = centre ? centre.tests.find((t) => t.testId === testId) : null;
+        if (test) {
+          test.price = Math.round(val);
+          delete state.modifiedPrices[modKey];
+          saveToStorage(STORAGE_KEYS.centres, state.centres);
+          setFeedback(dom.adminBulkPriceFeedback, `Updated ${test.name} to ${formatBDT(val)}.`, "success");
+          refreshAllUI();
+        }
+      } else if (action === "delete-test") {
+        const centre = getCentreById(centreId);
+        if (!centre) return;
+        centre.tests = centre.tests.filter((t) => t.testId !== testId);
+        saveToStorage(STORAGE_KEYS.centres, state.centres);
+        refreshAllUI();
+      } else if (action === "delete-review") {
+        const revId = btn.dataset.reviewId;
+        state.reviews = state.reviews.filter((r) => r.id !== revId);
+        saveToStorage(STORAGE_KEYS.reviews, state.reviews);
+        refreshAllUI();
+      } else if (action === "delete-booking") {
+        const bId = btn.dataset.bookingId;
+        state.bookings = state.bookings.filter((b) => b.id !== bId);
+        saveToStorage(STORAGE_KEYS.bookings, state.bookings);
+        refreshAllUI();
+      }
+    });
+
+    // Admin Booking Status Change
+    dom.adminBookingsList.addEventListener("change", (e) => {
+      const sel = e.target.closest("[data-admin-booking-status]");
+      if (!sel || !requireAdminRole()) return;
+      const bId = sel.dataset.adminBookingStatus;
+      const booking = state.bookings.find((b) => b.id === bId);
+      if (booking) {
+        booking.status = sel.value;
+        saveToStorage(STORAGE_KEYS.bookings, state.bookings);
+        renderVisitorProfile();
+      }
+    });
+
+    // ----------------------------------------------------------------------
+    // ADMIN EXPORT / IMPORT (.xlsx, .csv, .json)
+    // ----------------------------------------------------------------------
+    dom.exportXlsxBtn.addEventListener("click", () => {
+      if (!requireAdminRole(dom.adminImportFeedback)) return;
+      if (typeof XLSX === "undefined") {
+        setFeedback(dom.adminImportFeedback, "Excel library unavailable offline. Use CSV or JSON export.", "error");
+        return;
+      }
+      const ws = XLSX.utils.json_to_sheet(buildExportRows());
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "MediCompare_Tests");
+      XLSX.writeFile(wb, "medicompare_bd_dataset.xlsx");
+      setFeedback(dom.adminImportFeedback, "Downloaded Excel (.xlsx) dataset.", "success");
+    });
+
+    dom.exportCsvBtn.addEventListener("click", () => {
+      if (!requireAdminRole(dom.adminImportFeedback)) return;
+      const rows = buildExportRows();
+      const headers = Object.keys(rows[0] || {});
+      const csvLines = [
+        headers.join(","),
+        ...rows.map((r) =>
+          headers.map((h) => `"${String(r[h]).replace(/"/g, '""')}"`).join(",")
+        ),
+      ];
+      triggerDownload(
+        new Blob([csvLines.join("\n")], { type: "text/csv;charset=utf-8;" }),
+        "medicompare_bd_dataset.csv"
+      );
+      setFeedback(dom.adminImportFeedback, "Downloaded CSV spreadsheet.", "success");
+    });
+
+    dom.exportJsonBtn.addEventListener("click", () => {
+      if (!requireAdminRole(dom.adminImportFeedback)) return;
+      triggerDownload(
+        new Blob([JSON.stringify(state.centres, null, 2)], { type: "application/json" }),
+        "medicompare_bd_backup.json"
+      );
+      setFeedback(dom.adminImportFeedback, "Downloaded JSON backup.", "success");
+    });
+
+    dom.runImportBtn.addEventListener("click", async () => {
+      if (!requireAdminRole(dom.adminImportFeedback)) return;
+
+      const files = Array.from(dom.importFileInput.files || []);
+      const pasted = dom.importPasteTextarea.value.trim();
+
+      if (files.length === 0 && !pasted) {
+        setFeedback(dom.adminImportFeedback, "Select one or more .xlsx/.csv/.json files or paste CSV rows.", "error");
+        return;
+      }
+
+      let totalUpdated = 0;
+      let totalAdded = 0;
+
+      for (const file of files) {
+        const ext = file.name.split(".").pop().toLowerCase();
+        if (ext === "json") {
+          try {
+            const parsed = JSON.parse(await file.text());
+            if (Array.isArray(parsed) && parsed[0]?.tests) {
+              state.centres = parsed;
+              saveToStorage(STORAGE_KEYS.centres, state.centres);
+              refreshAllUI();
+              setFeedback(dom.adminImportFeedback, `Restored full JSON backup (${parsed.length} hospitals).`, "success");
+              return;
+            }
+          } catch (err) {
+            setFeedback(dom.adminImportFeedback, `Invalid JSON file: ${file.name}`, "error");
+            return;
+          }
+        } else if (ext === "csv") {
+          const rows = parseCsvText(await file.text());
+          const res = applyImportedRows(rows);
+          totalUpdated += res.updated;
+          totalAdded += res.added;
+        } else if (ext === "xlsx" || ext === "xls") {
+          if (typeof XLSX === "undefined") {
+            setFeedback(dom.adminImportFeedback, "Excel parser unavailable offline. Try CSV format.", "error");
+            return;
+          }
+          const data = await file.arrayBuffer();
+          const wb = XLSX.read(data, { type: "array" });
+          const firstSheet = wb.Sheets[wb.SheetNames[0]];
+          const rows = XLSX.utils.sheet_to_json(firstSheet);
+          const res = applyImportedRows(rows);
+          totalUpdated += res.updated;
+          totalAdded += res.added;
+        }
+      }
+
+      if (pasted) {
+        const rows = parseCsvText(pasted);
+        const res = applyImportedRows(rows);
+        totalUpdated += res.updated;
+        totalAdded += res.added;
+      }
+
+      dom.importFileInput.value = "";
+      dom.importPasteTextarea.value = "";
+      setFeedback(
+        dom.adminImportFeedback,
+        `Import complete: ${totalUpdated} price(s) updated, ${totalAdded} new test(s) added.`,
+        "success"
+      );
+    });
+  }
+
+  // --------------------------------------------------------------------------
+  // 20. BOOTSTRAP APPLICATION
+  // --------------------------------------------------------------------------
+  document.addEventListener("DOMContentLoaded", () => {
+    initState();
+    bindEvents();
+    refreshAllUI();
+  });
+})();
+
+3. How Role Separation & Access Control Work
+
+| Role                  | Login / Credentials                                                                | What They Can Do                                                                                                                                                                                                                                                   | Restrictions                                                                                                  |
+| :-------------------- | :--------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------ |
+| **Public Guest**      | No login needed                                                                    | Browse, search tests, compare prices side-by-side, view hospital details, read reviews, submit reviews/inquiries.                                                                                                                                                  | Cannot access saved shortlist or Admin tools.                                                                 |
+| **Visitor / Patient** | Click **Sign In** → `patient@demo.bd` / `patient123` (or register any new account) | Everything Guests can do **plus** a private Visitor Profile to **Save/Bookmark tests** (tracking live price updates), view **My Sample Requests** status, and post reviews with a `Member` tag.                                                                    | **Blocked from Admin Panel.** Attempting any admin edit triggers a restriction notice (`requireAdminRole()`). |
+| **Administrator**     | Click **Admin Login** → `admin` / `demo1234`                                       | Full control over all **6 hospitals & 300 reference tests**: add/edit/delete centres, add/update tests, bulk-edit prices in `৳`, import/export `.xlsx`/`.csv`/`.json`, delete reviews, and update sample request statuses (`Pending` → `Confirmed` → `Completed`). | Must authenticate through the special Admin modal.                                                            |
+
+Quick Run Check
+
+1.  Place index.html, style.css, and script.js together in the same folder.
+2.  Open index.html in a browser (or deploy directly to Netlify Drop or GitHub
+    Pages).
+3.  If you previously tested an older version in your browser and want to load
+    the fresh 6-hospital / 300-test dataset cleanly, sign in as Admin (admin /
+    demo1234) and click Reset Dataset under Manage Hospitals.
