@@ -10,6 +10,7 @@ import {
   FileSpreadsheet,
   Lock,
   LogOut,
+  Mail,
   MessageSquare,
   RefreshCw,
   RotateCcw,
@@ -43,6 +44,7 @@ interface AdminModalProps {
   bookings: SampleBooking[];
   categories: string[];
   onAdminSignIn: (email: string, pass: string) => Promise<FeedbackMessage>;
+  onRequestPasswordReset: (email: string) => Promise<FeedbackMessage>;
   onEnableTempAdmin: () => void;
   onExitTempAdmin: () => void;
   onAdminLogout: () => void;
@@ -92,6 +94,7 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   bookings,
   categories,
   onAdminSignIn,
+  onRequestPasswordReset,
   onEnableTempAdmin,
   onExitTempAdmin,
   onAdminLogout,
@@ -114,12 +117,15 @@ export const AdminModal: React.FC<AdminModalProps> = ({
   const isAdmin = session.role === 'admin';
   const isSignedIn = session.role !== 'guest';
 
-  // Admin Login Form State
+  // Admin Login & Password Reset Form State
   const [adminEmail, setAdminEmail] = useState('');
   const [adminPass, setAdminPass] = useState('');
   const [showAdminPass, setShowAdminPass] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [loginFeedback, setLoginFeedback] = useState<FeedbackMessage>({ text: '', type: '' });
+  const [forgotMode, setForgotMode] = useState(false);
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetFeedback, setResetFeedback] = useState<FeedbackMessage>({ text: '', type: '' });
 
   // Active Tab
   const [activeTab, setActiveTab] = useState<AdminTab>('centres');
@@ -517,6 +523,85 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                   Logout &amp; Switch Account
                 </button>
               </div>
+            ) : forgotMode ? (
+              <form
+                onSubmit={async (e) => {
+                  e.preventDefault();
+                  setSigningIn(true);
+                  setResetFeedback({ text: '', type: '' });
+                  try {
+                    const res = await onRequestPasswordReset(resetEmail);
+                    setResetFeedback(res);
+                  } finally {
+                    setSigningIn(false);
+                  }
+                }}
+                className="mx-auto max-w-md space-y-4 py-2"
+              >
+                <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
+                  <Mail className="mt-0.5 h-4 w-4 shrink-0 text-teal-800" />
+                  <div>
+                    <h3 className="text-xs font-bold text-slate-900">
+                      Reset Administrator Password via Email
+                    </h3>
+                    <p className="mt-0.5 text-xs text-slate-600">
+                      Enter your administrator email address to receive a password reset link.
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor="adminResetEmail"
+                    className="block text-xs font-semibold text-slate-700 mb-1"
+                  >
+                    Administrator Email
+                  </label>
+                  <input
+                    id="adminResetEmail"
+                    type="email"
+                    value={resetEmail}
+                    onChange={(e) => setResetEmail(e.target.value)}
+                    placeholder="Enter administrator email"
+                    autoComplete="email"
+                    required
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-teal-700 focus:outline-2 focus:outline-teal-700/20"
+                  />
+                </div>
+
+                {resetFeedback.text && (
+                  <p
+                    aria-live="polite"
+                    className={`rounded-lg px-3 py-2 text-xs font-medium ${
+                      resetFeedback.type === 'error'
+                        ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                        : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                    }`}
+                  >
+                    {resetFeedback.text}
+                  </p>
+                )}
+
+                <div className="flex flex-col gap-2 sm:flex-row">
+                  <button
+                    type="submit"
+                    disabled={signingIn}
+                    className="h-10 flex-1 rounded-lg bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 cursor-pointer transition-colors"
+                  >
+                    {signingIn ? 'Sending Reset Link...' : 'Send Reset Link'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForgotMode(false);
+                      setResetFeedback({ text: '', type: '' });
+                    }}
+                    className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                  >
+                    Back to Sign In
+                  </button>
+                </div>
+              </form>
             ) : (
               <form
                 onSubmit={async (e) => {
@@ -557,12 +642,25 @@ export const AdminModal: React.FC<AdminModalProps> = ({
                 </div>
 
                 <div>
-                  <label
-                    htmlFor="adminLoginPass"
-                    className="block text-xs font-semibold text-slate-700 mb-1"
-                  >
-                    Password
-                  </label>
+                  <div className="flex items-center justify-between mb-1">
+                    <label
+                      htmlFor="adminLoginPass"
+                      className="block text-xs font-semibold text-slate-700"
+                    >
+                      Password
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setResetEmail(adminEmail);
+                        setResetFeedback({ text: '', type: '' });
+                        setForgotMode(true);
+                      }}
+                      className="text-xs font-semibold text-teal-800 hover:underline cursor-pointer"
+                    >
+                      Forgot Password?
+                    </button>
+                  </div>
                   <div className="relative">
                     <input
                       id="adminLoginPass"

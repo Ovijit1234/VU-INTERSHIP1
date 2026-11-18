@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Eye, EyeOff, LogOut, Shield, User, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { Eye, EyeOff, KeyRound, LogOut, Mail, Shield, User, X } from 'lucide-react';
 import {
   DiagnosticCentre,
   FeedbackMessage,
@@ -18,6 +18,10 @@ interface VisitorAccountModalProps {
   bookings: SampleBooking[];
   onSignIn: (email: string, pass: string) => Promise<FeedbackMessage>;
   onSignUp: (name: string, email: string, area: string, pass: string) => Promise<FeedbackMessage>;
+  onRequestPasswordReset: (email: string) => Promise<FeedbackMessage>;
+  onUpdatePassword: (newPassword: string) => Promise<FeedbackMessage>;
+  isPasswordRecovery: boolean;
+  onCancelPasswordRecovery: () => void;
   onUpdateArea: (area: string) => void;
   onLogout: () => void;
   onRemoveSavedTest: (centreId: string, testId: string) => void;
@@ -37,6 +41,10 @@ export const VisitorAccountModal: React.FC<VisitorAccountModalProps> = ({
   bookings,
   onSignIn,
   onSignUp,
+  onRequestPasswordReset,
+  onUpdatePassword,
+  isPasswordRecovery,
+  onCancelPasswordRecovery,
   onUpdateArea,
   onLogout,
   onRemoveSavedTest,
@@ -46,13 +54,30 @@ export const VisitorAccountModal: React.FC<VisitorAccountModalProps> = ({
   onExitTempAdmin,
   onClose,
 }) => {
-  const [authTab, setAuthTab] = useState<'signin' | 'signup'>('signin');
+  const [authTab, setAuthTab] = useState<'signin' | 'signup' | 'forgot'>('signin');
 
   // Sign In state
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPass, setLoginPass] = useState('');
   const [showLoginPass, setShowLoginPass] = useState(false);
   const [signInFeedback, setSignInFeedback] = useState<FeedbackMessage>({
+    text: '',
+    type: '',
+  });
+
+  // Forgot Password state
+  const [resetEmail, setResetEmail] = useState('');
+  const [resetFeedback, setResetFeedback] = useState<FeedbackMessage>({
+    text: '',
+    type: '',
+  });
+
+  // Set / Change Password state
+  const [showChangePassForm, setShowChangePassForm] = useState(false);
+  const [newPass, setNewPass] = useState('');
+  const [confirmNewPass, setConfirmNewPass] = useState('');
+  const [showNewPass, setShowNewPass] = useState(false);
+  const [updatePassFeedback, setUpdatePassFeedback] = useState<FeedbackMessage>({
     text: '',
     type: '',
   });
@@ -70,6 +95,14 @@ export const VisitorAccountModal: React.FC<VisitorAccountModalProps> = ({
   });
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+
+  useEffect(() => {
+    if (isPasswordRecovery) {
+      setUpdatePassFeedback({ text: '', type: '' });
+      setNewPass('');
+      setConfirmNewPass('');
+    }
+  }, [isPasswordRecovery]);
 
   if (!isOpen) return null;
 
@@ -170,7 +203,130 @@ export const VisitorAccountModal: React.FC<VisitorAccountModalProps> = ({
         </div>
 
         <div className="space-y-6 p-6">
-          {!user ? (
+          {isPasswordRecovery ? (
+            <form
+              onSubmit={async (e) => {
+                e.preventDefault();
+                if (newPass.length < 6) {
+                  setUpdatePassFeedback({
+                    text: 'New password must be at least 6 characters.',
+                    type: 'error',
+                  });
+                  return;
+                }
+                if (newPass !== confirmNewPass) {
+                  setUpdatePassFeedback({
+                    text: 'Passwords do not match.',
+                    type: 'error',
+                  });
+                  return;
+                }
+                setIsSubmitting(true);
+                setUpdatePassFeedback({ text: '', type: '' });
+                try {
+                  const res = await onUpdatePassword(newPass);
+                  setUpdatePassFeedback(res);
+                  if (res.type === 'success') {
+                    setNewPass('');
+                    setConfirmNewPass('');
+                  }
+                } finally {
+                  setIsSubmitting(false);
+                }
+              }}
+              className="space-y-4"
+            >
+              <div className="flex items-start gap-3 rounded-xl border border-teal-200 bg-teal-50/70 p-4">
+                <KeyRound className="mt-0.5 h-5 w-5 shrink-0 text-teal-800" />
+                <div>
+                  <h3 className="text-sm font-bold text-slate-900">
+                    Set a New Password
+                  </h3>
+                  <p className="mt-0.5 text-xs text-slate-600">
+                    Your email verification link was confirmed. Enter a new password below for {user?.email || 'your account'}.
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="recoveryNewPass"
+                  className="block text-xs font-semibold text-slate-700 mb-1"
+                >
+                  New Password (min 6 characters)
+                </label>
+                <div className="relative">
+                  <input
+                    id="recoveryNewPass"
+                    type={showNewPass ? 'text' : 'password'}
+                    value={newPass}
+                    onChange={(e) => setNewPass(e.target.value)}
+                    placeholder="Enter new password"
+                    minLength={6}
+                    required
+                    className="h-10 w-full rounded-lg border border-slate-300 bg-white pl-3 pr-10 text-sm text-slate-900 focus:border-teal-700 focus:outline-2 focus:outline-teal-700/20"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPass((prev) => !prev)}
+                    aria-label={showNewPass ? 'Hide password' : 'Show password'}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-slate-500 hover:text-slate-800 cursor-pointer"
+                  >
+                    {showNewPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label
+                  htmlFor="recoveryConfirmPass"
+                  className="block text-xs font-semibold text-slate-700 mb-1"
+                >
+                  Confirm New Password
+                </label>
+                <input
+                  id="recoveryConfirmPass"
+                  type={showNewPass ? 'text' : 'password'}
+                  value={confirmNewPass}
+                  onChange={(e) => setConfirmNewPass(e.target.value)}
+                  placeholder="Repeat new password"
+                  minLength={6}
+                  required
+                  className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-teal-700 focus:outline-2 focus:outline-teal-700/20"
+                />
+              </div>
+
+              {updatePassFeedback.text && (
+                <p
+                  aria-live="polite"
+                  className={`rounded-lg px-3 py-2 text-xs font-medium ${
+                    updatePassFeedback.type === 'error'
+                      ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                      : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                  }`}
+                >
+                  {updatePassFeedback.text}
+                </p>
+              )}
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="h-10 flex-1 rounded-lg bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 cursor-pointer transition-colors"
+                >
+                  {isSubmitting ? 'Updating Password...' : 'Update Password'}
+                </button>
+                <button
+                  type="button"
+                  onClick={onCancelPasswordRecovery}
+                  className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : !user ? (
             <>
               {/* Auth Tabs */}
               <div className="flex gap-1 rounded-lg bg-slate-100 p-1">
@@ -181,7 +337,7 @@ export const VisitorAccountModal: React.FC<VisitorAccountModalProps> = ({
                     setSignInFeedback({ text: '', type: '' });
                   }}
                   className={`flex-1 rounded-md py-2 text-xs font-semibold cursor-pointer transition-colors ${
-                    authTab === 'signin'
+                    authTab === 'signin' || authTab === 'forgot'
                       ? 'bg-white text-slate-900 shadow-xs'
                       : 'text-slate-600 hover:text-slate-900'
                   }`}
@@ -204,7 +360,86 @@ export const VisitorAccountModal: React.FC<VisitorAccountModalProps> = ({
                 </button>
               </div>
 
-              {authTab === 'signin' ? (
+              {authTab === 'forgot' ? (
+                <form
+                  onSubmit={async (e) => {
+                    e.preventDefault();
+                    setIsSubmitting(true);
+                    setResetFeedback({ text: '', type: '' });
+                    try {
+                      const res = await onRequestPasswordReset(resetEmail);
+                      setResetFeedback(res);
+                    } finally {
+                      setIsSubmitting(false);
+                    }
+                  }}
+                  className="space-y-4"
+                >
+                  <div className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3.5">
+                    <Mail className="mt-0.5 h-4 w-4 shrink-0 text-teal-800" />
+                    <div>
+                      <h3 className="text-xs font-bold text-slate-900">
+                        Reset Password via Email
+                      </h3>
+                      <p className="mt-0.5 text-xs text-slate-600">
+                        Enter your registered account email address and we will send you a password reset link.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label
+                      htmlFor="userResetEmail"
+                      className="block text-xs font-semibold text-slate-700 mb-1"
+                    >
+                      Registered Email Address
+                    </label>
+                    <input
+                      id="userResetEmail"
+                      type="email"
+                      value={resetEmail}
+                      onChange={(e) => setResetEmail(e.target.value)}
+                      placeholder="you@example.com"
+                      autoComplete="email"
+                      required
+                      className="h-10 w-full rounded-lg border border-slate-300 bg-white px-3 text-sm text-slate-900 focus:border-teal-700 focus:outline-2 focus:outline-teal-700/20"
+                    />
+                  </div>
+
+                  {resetFeedback.text && (
+                    <p
+                      aria-live="polite"
+                      className={`rounded-lg px-3 py-2 text-xs font-medium ${
+                        resetFeedback.type === 'error'
+                          ? 'bg-rose-50 text-rose-700 border border-rose-200'
+                          : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      }`}
+                    >
+                      {resetFeedback.text}
+                    </p>
+                  )}
+
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <button
+                      type="submit"
+                      disabled={isSubmitting}
+                      className="h-10 flex-1 rounded-lg bg-teal-700 px-4 text-sm font-semibold text-white hover:bg-teal-800 disabled:opacity-60 cursor-pointer transition-colors"
+                    >
+                      {isSubmitting ? 'Sending Reset Link...' : 'Send Reset Link'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setAuthTab('signin');
+                        setResetFeedback({ text: '', type: '' });
+                      }}
+                      className="h-10 rounded-lg border border-slate-300 bg-white px-4 text-xs font-semibold text-slate-700 hover:bg-slate-50 cursor-pointer"
+                    >
+                      Back to Sign In
+                    </button>
+                  </div>
+                </form>
+              ) : authTab === 'signin' ? (
                 <form onSubmit={handleSignInSubmit} className="space-y-4">
                   <div>
                     <label
@@ -226,12 +461,25 @@ export const VisitorAccountModal: React.FC<VisitorAccountModalProps> = ({
                   </div>
 
                   <div>
-                    <label
-                      htmlFor="userLoginPass"
-                      className="block text-xs font-semibold text-slate-700 mb-1"
-                    >
-                      Password
-                    </label>
+                    <div className="flex items-center justify-between mb-1">
+                      <label
+                        htmlFor="userLoginPass"
+                        className="block text-xs font-semibold text-slate-700"
+                      >
+                        Password
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setResetEmail(loginEmail);
+                          setResetFeedback({ text: '', type: '' });
+                          setAuthTab('forgot');
+                        }}
+                        className="text-xs font-semibold text-teal-800 hover:underline cursor-pointer"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
                     <div className="relative">
                       <input
                         id="userLoginPass"
@@ -459,30 +707,126 @@ export const VisitorAccountModal: React.FC<VisitorAccountModalProps> = ({
           ) : (
             <div className="space-y-6">
               {/* Signed-In Personal Profile Card */}
-              <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">{user.name}</h3>
-                  <p className="mt-0.5 text-xs text-slate-600">
-                    {user.email} · {user.role === 'admin' ? 'Owner Account' : 'Personal Account'}
-                  </p>
+              <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-4">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-base font-bold text-slate-900">{user.name}</h3>
+                    <p className="mt-0.5 text-xs text-slate-600">
+                      {user.email} · {user.role === 'admin' ? 'Owner Account' : 'Personal Account'}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label htmlFor="profileAreaSelect" className="text-xs font-medium text-slate-600">
+                      Preferred Area:
+                    </label>
+                    <select
+                      id="profileAreaSelect"
+                      value={user.area}
+                      onChange={(e) => onUpdateArea(e.target.value)}
+                      className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs font-medium text-slate-800"
+                    >
+                      {areas.map((a) => (
+                        <option key={a} value={a}>
+                          {a}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowChangePassForm((prev) => !prev);
+                        setUpdatePassFeedback({ text: '', type: '' });
+                      }}
+                      className="h-8 rounded-md border border-slate-300 bg-white px-2.5 text-xs font-medium text-slate-700 hover:bg-slate-100 cursor-pointer"
+                    >
+                      {showChangePassForm ? 'Close' : 'Change Password'}
+                    </button>
+                  </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <label htmlFor="profileAreaSelect" className="text-xs font-medium text-slate-600">
-                    Preferred Area:
-                  </label>
-                  <select
-                    id="profileAreaSelect"
-                    value={user.area}
-                    onChange={(e) => onUpdateArea(e.target.value)}
-                    className="h-8 rounded-md border border-slate-300 bg-white px-2 text-xs font-medium text-slate-800"
+
+                {showChangePassForm && (
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      if (newPass.length < 6) {
+                        setUpdatePassFeedback({
+                          text: 'Password must be at least 6 characters.',
+                          type: 'error',
+                        });
+                        return;
+                      }
+                      if (newPass !== confirmNewPass) {
+                        setUpdatePassFeedback({
+                          text: 'Passwords do not match.',
+                          type: 'error',
+                        });
+                        return;
+                      }
+                      setIsSubmitting(true);
+                      setUpdatePassFeedback({ text: '', type: '' });
+                      try {
+                        const res = await onUpdatePassword(newPass);
+                        setUpdatePassFeedback(res);
+                        if (res.type === 'success') {
+                          setNewPass('');
+                          setConfirmNewPass('');
+                          setShowChangePassForm(false);
+                        }
+                      } finally {
+                        setIsSubmitting(false);
+                      }
+                    }}
+                    className="grid grid-cols-1 gap-3 border-t border-slate-200 pt-3 sm:grid-cols-2"
                   >
-                    {areas.map((a) => (
-                      <option key={a} value={a}>
-                        {a}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+                    <input
+                      type={showNewPass ? 'text' : 'password'}
+                      value={newPass}
+                      onChange={(e) => setNewPass(e.target.value)}
+                      placeholder="New password (min 6 chars)"
+                      minLength={6}
+                      required
+                      className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900"
+                    />
+                    <input
+                      type={showNewPass ? 'text' : 'password'}
+                      value={confirmNewPass}
+                      onChange={(e) => setConfirmNewPass(e.target.value)}
+                      placeholder="Confirm new password"
+                      minLength={6}
+                      required
+                      className="h-9 rounded-lg border border-slate-300 bg-white px-3 text-xs text-slate-900"
+                    />
+                    <div className="flex flex-wrap items-center justify-between gap-2 sm:col-span-2">
+                      <label className="inline-flex items-center gap-1.5 text-xs text-slate-600 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={showNewPass}
+                          onChange={(e) => setShowNewPass(e.target.checked)}
+                          className="h-3.5 w-3.5 accent-teal-700"
+                        />
+                        Show passwords
+                      </label>
+                      <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="rounded-lg bg-teal-700 px-3.5 py-1.5 text-xs font-semibold text-white hover:bg-teal-800 disabled:opacity-60 cursor-pointer"
+                      >
+                        {isSubmitting ? 'Saving...' : 'Save New Password'}
+                      </button>
+                    </div>
+                    {updatePassFeedback.text && (
+                      <p
+                        className={`sm:col-span-2 text-xs font-medium ${
+                          updatePassFeedback.type === 'error'
+                            ? 'text-rose-700'
+                            : 'text-emerald-700'
+                        }`}
+                      >
+                        {updatePassFeedback.text}
+                      </p>
+                    )}
+                  </form>
+                )}
               </div>
 
               {user.role === 'admin' && (

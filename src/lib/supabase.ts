@@ -6,6 +6,7 @@ export const SUPABASE_URL =
   `https://${SUPABASE_PROJECT_ID}.supabase.co`;
 export const SUPABASE_PUBLISHABLE_KEY =
   import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY ||
+  import.meta.env.VITE_SUPABASE_ANON_KEY ||
   'sb_publishable_hCSxyrYAz927LY2ccPmu4A_OaXahgun';
 
 export const isSupabaseConfigured = Boolean(

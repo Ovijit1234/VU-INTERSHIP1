@@ -60,6 +60,11 @@ export default function App() {
   );
   const [visitorUser, setVisitorUser] = useState<VisitorUser | null>(null);
   const [isTempAdmin, setIsTempAdmin] = useState(false);
+  const [isPasswordRecovery, setIsPasswordRecovery] = useState(() =>
+    typeof window !== 'undefined' &&
+    (window.location.hash.includes('type=recovery') ||
+      window.location.search.includes('type=recovery'))
+  );
   const [supabaseTablesReady, setSupabaseTablesReady] = useState(false);
   const [guestSavedTests, setGuestSavedTests] = useState<SavedTestRef[]>(() =>
     loadFromStorage(VISITOR_SAVED_KEY, () => [])
@@ -116,8 +121,12 @@ export default function App() {
     void syncAuthSession();
 
     const { data: authListener } = supabase.auth.onAuthStateChange(
-      async (_event, nextSession) => {
+      async (event, nextSession) => {
         if (!active) return;
+        if (event === 'PASSWORD_RECOVERY') {
+          setIsPasswordRecovery(true);
+          setAccountModalOpen(true);
+        }
         if (nextSession?.user) {
           const profile = await hydrateVisitorProfile(nextSession.user);
           if (!active) return;
@@ -148,7 +157,11 @@ export default function App() {
 
   // Modals State
   const [detailCentreId, setDetailCentreId] = useState<string | null>(null);
-  const [accountModalOpen, setAccountModalOpen] = useState(false);
+  const [accountModalOpen, setAccountModalOpen] = useState(() =>
+    typeof window !== 'undefined' &&
+    (window.location.hash.includes('type=recovery') ||
+      window.location.search.includes('type=recovery'))
+  );
   const [adminModalOpen, setAdminModalOpen] = useState(false);
   const [legalModalType, setLegalModalType] = useState<'privacy' | 'disclaimer' | null>(null);
 
@@ -531,6 +544,68 @@ export default function App() {
     return { text: '', type: 'success' };
   };
 
+  const handleRequestPasswordReset = async (
+    email: string
+  ): Promise<FeedbackMessage> => {
+    const cleanEmail = email.trim();
+    if (!cleanEmail || !cleanEmail.includes('@')) {
+      return {
+        text: 'Please enter a valid registered email address.',
+        type: 'error',
+      };
+    }
+
+    const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+      redirectTo: window.location.origin,
+    });
+    if (error) {
+      return {
+        text: error.message || 'Unable to send password reset email.',
+        type: 'error',
+      };
+    }
+
+    return {
+      text: `Password reset link sent to ${cleanEmail}. Check your email inbox (and spam folder) and click the link to set a new password.`,
+      type: 'success',
+    };
+  };
+
+  const handleUpdatePassword = async (
+    newPassword: string
+  ): Promise<FeedbackMessage> => {
+    if (newPassword.length < 6) {
+      return {
+        text: 'Password must be at least 6 characters long.',
+        type: 'error',
+      };
+    }
+
+    const { error } = await supabase.auth.updateUser({
+      password: newPassword,
+    });
+    if (error) {
+      return {
+        text: error.message || 'Could not update password. Please try requesting a new reset link.',
+        type: 'error',
+      };
+    }
+
+    setIsPasswordRecovery(false);
+    if (typeof window !== 'undefined' && window.location.hash) {
+      window.history.replaceState(
+        null,
+        '',
+        window.location.pathname + window.location.search
+      );
+    }
+
+    return {
+      text: 'Your password has been updated successfully.',
+      type: 'success',
+    };
+  };
+
   const handleExitTempAdmin = () => {
     setIsTempAdmin(false);
     setAdminModalOpen(false);
@@ -540,6 +615,7 @@ export default function App() {
     void supabase.auth.signOut();
     setVisitorUser(null);
     setIsTempAdmin(false);
+    setIsPasswordRecovery(false);
     setAccountModalOpen(false);
     setAdminModalOpen(false);
   };
@@ -1109,6 +1185,10 @@ export default function App() {
         bookings={bookings}
         onSignIn={handleUserSignIn}
         onSignUp={handleUserSignUp}
+        onRequestPasswordReset={handleRequestPasswordReset}
+        onUpdatePassword={handleUpdatePassword}
+        isPasswordRecovery={isPasswordRecovery}
+        onCancelPasswordRecovery={() => setIsPasswordRecovery(false)}
         onUpdateArea={handleUpdateUserArea}
         onLogout={handleLogout}
         onRemoveSavedTest={handleToggleSave}
@@ -1128,6 +1208,7 @@ export default function App() {
         bookings={bookings}
         categories={categories}
         onAdminSignIn={handleAdminSignIn}
+        onRequestPasswordReset={handleRequestPasswordReset}
         onEnableTempAdmin={() => setIsTempAdmin(true)}
         onExitTempAdmin={handleExitTempAdmin}
         onAdminLogout={handleLogout}
